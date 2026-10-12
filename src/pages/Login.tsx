@@ -10,7 +10,12 @@ export default function Login() {
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
-    e.preventDefault(); setBusy(true); setMsg('')
+    e.preventDefault(); setMsg('')
+    if (mode === 'signup' && !/^[a-z0-9._-]{3,}$/.test(username.trim().toLowerCase())) {
+      setMsg('Usuário: só letras sem acento, números, ponto, traço ou sublinhado, sem espaços (mín. 3). Ex.: joao.silva')
+      return
+    }
+    setBusy(true)
     const email = userToEmail(username)
     const { error } = mode === 'login'
       ? await supabase.auth.signInWithPassword({ email, password })
