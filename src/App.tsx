@@ -1,6 +1,7 @@
 import { AuthProvider, useAuth } from './auth'
 import { configured } from './lib/supabase'
 import Login from './pages/Login'
+import Admin from './pages/Admin'
 
 const Screen = ({ title, text, action }: { title: string; text: string; action?: () => void }) => (
   <main className="mx-auto flex min-h-screen max-w-sm flex-col items-center justify-center gap-4 p-6 text-center">
@@ -18,7 +19,8 @@ function Gate() {
   if (!session) return <Login />
   if (!profile || profile.status === 'pending') return <Screen title="Aguardando aprovação" text="Seu cadastro foi enviado. O administrador precisa liberar seu acesso." action={signOut} />
   if (profile.status === 'blocked') return <Screen title="Acesso bloqueado" text="Fale com o administrador." action={signOut} />
-  return <Screen title={`Olá, ${profile.full_name.split(' ')[0]}!`} text={profile.role === 'admin' ? 'Painel do administrador (em breve).' : 'Suas rotas aparecerão aqui (Fase 1).'} action={signOut} />
+  if (profile.role === 'admin') return <Admin />
+  return <Screen title={`Olá, ${profile.full_name.split(' ')[0]}!`} text="Suas rotas aparecerão aqui (Fase 1)." action={signOut} />
 }
 
 export default function App() { return <AuthProvider><Gate /></AuthProvider> }
