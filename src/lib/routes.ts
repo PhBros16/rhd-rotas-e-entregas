@@ -9,6 +9,7 @@ export type StopRow = {
   pay_method: 'pix' | 'cash' | null; paid_amount: number | null; pay_differs: boolean
   delivered_at: string | null; received_by: string | null; notes: string | null
   deferred: boolean; retry_at: string | null; attempt_count: number
+  pin_url: string | null; client_notes: string | null
 }
 export type RouteRow = {
   id: string; owner_id: string; name: string | null; status: 'draft' | 'active' | 'finished' | 'cancelled'
