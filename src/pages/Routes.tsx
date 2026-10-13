@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth'
 import { localDb } from '../lib/clients'
 import { refresh, startRoute, summarize, type RouteRow, type StopRow } from '../lib/routes'
-import { brl } from '../components/RouteBuilder'
+import { brl } from '../lib/format'
 import ActiveRoute from '../components/ActiveRoute'
 
 const label = { draft: 'Rascunho', active: 'Em andamento', finished: 'Finalizada', cancelled: 'Cancelada' } as const
@@ -30,6 +30,7 @@ export default function Routes() {
   const [open, setOpen] = useState<string | null>(null)
   const [work, setWork] = useState<string | null>(null)
   const [autoDone, setAutoDone] = useState(false)
+  const [askBackup, setAskBackup] = useState(false)
   const [syncing, setSyncing] = useState(true)
   const [fOwner, setFOwner] = useState(''); const [fStatus, setFStatus] = useState(''); const [from, setFrom] = useState(''); const [to, setTo] = useState('')
   const [err, setErr] = useState('')
@@ -56,10 +57,11 @@ export default function Routes() {
   const total = summarize(list.flatMap(r => stopsBy.get(r.id) ?? []))
   const sum = (rs: RouteRow[]) => summarize(rs.flatMap(r => stopsBy.get(r.id) ?? []))
 
+  const ownerOf = (id: string) => { const r = (routes ?? []).find(x => x.id === id); return r && r.owner_id !== profile?.id ? names[r.owner_id] ?? 'Entregador' : profile?.full_name ?? '' }
   async function go(r: RouteRow) {
     if ((routes ?? []).some(x => x.status === 'active' && x.owner_id === profile?.id)) { setErr('Você já tem uma rota em andamento. Continue ou finalize ela primeiro.'); return }
     if (!window.confirm(`Iniciar "${r.name}" agora?`)) return
-    setErr(''); await startRoute(r); setWork(r.id)
+    setErr(''); await startRoute(r); setAskBackup(true); setWork(r.id)
   }
   async function remove(r: RouteRow) {
     if (!window.confirm(`Excluir "${r.name}"?`)) return
@@ -116,7 +118,7 @@ export default function Routes() {
           </ul>
         </section>
       ) })}
-      {work && <ActiveRoute routeId={work} onClose={() => setWork(null)} />}
+      {work && <ActiveRoute routeId={work} askBackup={askBackup} owner={ownerOf(work)} onClose={() => { setWork(null); setAskBackup(false) }} />}
     </main>
   )
 }
