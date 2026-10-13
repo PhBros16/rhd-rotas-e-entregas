@@ -1,16 +1,23 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth'
 import { CITIES, digits, emptyDraft, localDb, lookupCep, norm, type Client, type ClientDraft } from '../lib/clients'
 import { extractUrl, fmtCep, fmtPhone, mapsUrl, resolveCoords, wazeUrl, whatsUrl } from '../lib/maplink'
 import MiniMap from '../components/MiniMap'
+import RouteBuilder from '../components/RouteBuilder'
+import { clearDraft, loadDraft, saveDraft, type Draft } from '../lib/draft'
 
 const field = 'w-full rounded-xl bg-slate-800 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-orange-500'
 const chip = 'rounded-lg bg-slate-700 px-3 py-2 text-sm active:scale-95'
 const addr = (c: Client) => [c.street, c.number].filter(Boolean).join(', ')
 
-function ClientForm({ initial, onClose, onSaved }: { initial: Client | null; onClose: () => void; onSaved: (note?: string) => void }) {
-  const [d, setD] = useState<ClientDraft>(initial ? { ...emptyDraft(), ...initial } : emptyDraft())
+function ClientForm({ initial, restored, onClose, onSaved }: { initial: Client | null; restored?: ClientDraft; onClose: () => void; onSaved: (note?: string) => void }) {
+  const base = useRef(JSON.stringify(initial ? { ...emptyDraft(), ...initial } : emptyDraft()))
+  const [d, setD] = useState<ClientDraft>(restored ?? (JSON.parse(base.current) as ClientDraft))
+  const [fromDraft, setFromDraft] = useState(Boolean(restored))
+  const dirty = JSON.stringify(d) !== base.current
+  useEffect(() => { if (dirty) saveDraft({ id: initial?.id ?? null, data: d }) }, [d, dirty, initial?.id])
+  function close() { if (dirty && !window.confirm('Descartar o que você digitou?')) return; clearDraft(); onClose() }
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const set = (k: keyof ClientDraft) => (e: { target: { value: string } }) => setD(p => ({ ...p, [k]: e.target.value }))
@@ -40,13 +47,14 @@ function ClientForm({ initial, onClose, onSaved }: { initial: Client | null; onC
       neighborhood: d.neighborhood?.trim() || null, city: d.city.trim(), pin_url: pin || null, lat, lng, notes: d.notes?.trim() || null }
     const { error } = initial ? await supabase.from('clients').update(row).eq('id', initial.id) : await supabase.from('clients').insert(row)
     setBusy(false)
-    if (error) setMsg(error.message); else onSaved(note)
+    if (error) setMsg(error.message); else { clearDraft(); onSaved(note) }
   }
 
   return (
     <div className="fixed inset-0 z-10 overflow-y-auto bg-slate-900">
       <form onSubmit={save} className="mx-auto flex max-w-lg flex-col gap-3 p-4 pb-24">
-        <div className="flex items-center justify-between"><h2 className="text-lg font-bold">{initial ? 'Editar cliente' : 'Novo cliente'}</h2><button type="button" onClick={onClose} className={chip}>Fechar</button></div>
+        <div className="flex items-center justify-between"><h2 className="text-lg font-bold">{initial ? 'Editar cliente' : 'Novo cliente'}</h2><button type="button" onClick={close} className={chip}>Fechar</button></div>
+        {fromDraft && <p className="rounded-lg bg-sky-500/20 p-2 text-sm text-sky-200">Rascunho recuperado. <button type="button" className="underline" onClick={() => { setD(JSON.parse(base.current)); setFromDraft(false); clearDraft() }}>Começar do zero</button></p>}
         <input className={field} placeholder="Nome *" value={d.name} onChange={set('name')} required />
         <input className={field} placeholder="WhatsApp (com DDD)" inputMode="tel" value={d.phone ?? ''} onChange={set('phone')} />
         <input className={field} placeholder="CEP (opcional, preenche o endereço)" inputMode="numeric" value={d.cep ?? ''} onChange={e => onCep(e.target.value)} />
@@ -66,10 +74,16 @@ function ClientForm({ initial, onClose, onSaved }: { initial: Client | null; onC
   )
 }
 
-function Card({ c, open, owner, onToggle, onEdit, onDelete }: { c: Client; open: boolean; owner?: string; onToggle: () => void; onEdit: () => void; onDelete: () => void }) {
+function Card({ c, open, owner, selecting, selected, onToggle, onEdit, onDelete }: { c: Client; open: boolean; owner?: string; selecting?: boolean; selected?: boolean; onToggle: () => void; onEdit: () => void; onDelete: () => void }) {
   const full = [c.street, c.number, c.neighborhood, c.city, 'PE'].filter(Boolean).join(', ')
   const pos = c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : null
   const dest = pos ?? full
+  if (selecting) return (
+    <li><button onClick={onToggle} className={`flex w-full items-center gap-3 rounded-2xl p-4 text-left ${selected ? 'bg-orange-500/20 ring-2 ring-orange-500' : 'bg-slate-800'}`}>
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 font-bold ${selected ? 'border-orange-500 bg-orange-500 text-slate-900' : 'border-slate-500'}`}>{selected ? '✓' : ''}</span>
+      <span className="min-w-0"><span className="block font-semibold">{c.name}</span><span className="block truncate text-sm text-slate-400">{addr(c) || 'Sem endereço'}{c.neighborhood ? ` · ${c.neighborhood}` : ''}</span></span>
+    </button></li>
+  )
   return (
     <li className="rounded-2xl bg-slate-800">
       <button onClick={onToggle} className="flex w-full items-start justify-between gap-2 p-4 text-left">
@@ -102,7 +116,7 @@ function Card({ c, open, owner, onToggle, onEdit, onDelete }: { c: Client; open:
 type View = 'cidade' | 'bairro' | 'todos'
 type Section = { title: string; count: number; subs: { title: string; items: Client[] }[] }
 
-export default function Clients() {
+export default function Clients({ onRouteSaved }: { onRouteSaved?: () => void }) {
   const { profile, signOut } = useAuth()
   const isAdmin = profile?.role === 'admin'
   const [clients, setClients] = useState<Client[]>([])
@@ -114,6 +128,10 @@ export default function Clients() {
   const [editing, setEditing] = useState<Client | null | undefined>(undefined)
   const [offline, setOffline] = useState(false)
   const [toast, setToast] = useState('')
+  const [selecting, setSelecting] = useState(false)
+  const [selIds, setSelIds] = useState<string[]>([])
+  const [building, setBuilding] = useState(false)
+  const [pending, setPending] = useState<Draft | null>(loadDraft)
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('clients').select('*').order('name')
@@ -128,6 +146,15 @@ export default function Clients() {
       setOwners(Object.fromEntries((data ?? []).map(p => [p.id, (p.full_name || p.username).split(' ')[0]]))))
   }, [isAdmin])
 
+  useEffect(() => {
+    if (!pending || editing !== undefined) return
+    if (pending.id === null) setEditing(null)
+    else { const c = clients.find(x => x.id === pending.id); if (c) setEditing(c) }
+  }, [pending, clients, editing])
+
+  const toggle = (id: string) => setSelIds(s => (s.includes(id) ? s.filter(x => x !== id) : [...s, id]))
+  const toggleGroup = (items: Client[]) => setSelIds(s => (items.every(c => s.includes(c.id)) ? s.filter(id => !items.some(c => c.id === id)) : [...s, ...items.filter(c => !s.includes(c.id)).map(c => c.id)]))
+  const allOn = (items: Client[]) => items.length > 0 && items.every(c => selIds.includes(c.id))
   const say = (m: string) => { setToast(m); setTimeout(() => setToast(''), 6000) }
   async function remove(c: Client) {
     if (!window.confirm(`Excluir ${c.name}?`)) return
@@ -158,7 +185,9 @@ export default function Clients() {
     <main className="mx-auto max-w-lg p-4 pb-28">
       <header className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-3"><img src="/favicon.svg" alt="" className="h-10 w-10" /><div><h1 className="font-bold">Clientes</h1><p className="text-sm text-slate-400">{profile?.full_name.split(' ')[0]} · {clients.length} cadastrados</p></div></div>
-        <button onClick={signOut} className={chip}>Sair</button>
+        <div className="flex gap-2">{selecting
+          ? <button onClick={() => { setSelecting(false); setSelIds([]) }} className={chip}>Cancelar</button>
+          : <><button onClick={() => { setSelecting(true); setOpenId(null) }} className={`${chip} !bg-orange-500 font-semibold text-slate-900`}>Montar rota</button><button onClick={signOut} className={chip}>Sair</button></>}</div>
       </header>
       {offline && <p className="mb-2 rounded-lg bg-amber-500/20 p-2 text-sm text-amber-300">Sem conexão: mostrando a última lista salva.</p>}
       {toast && <p className="mb-2 rounded-lg bg-amber-500/20 p-2 text-sm text-amber-300">{toast}</p>}
@@ -172,20 +201,24 @@ export default function Clients() {
       {sections.length === 0 && <p className="mt-10 text-center text-slate-400">{clients.length ? 'Nenhum cliente encontrado.' : 'Nenhum cliente ainda. Toque em + para cadastrar.'}</p>}
       {sections.map(s => (
         <section key={s.title} className="mb-5">
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-orange-400">{s.title} <span className="text-slate-500">({s.count})</span></h2>
+          <div className="mb-2 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold uppercase tracking-wide text-orange-400">{s.title} <span className="text-slate-500">({s.count})</span></h2>
+            {selecting && <button className="shrink-0 text-xs text-orange-400 underline" onClick={() => toggleGroup(s.subs.flatMap(x => x.items))}>{allOn(s.subs.flatMap(x => x.items)) ? 'Desmarcar todos' : 'Marcar todos'}</button>}</div>
           {s.subs.map(sub => (
             <div key={sub.title} className="mb-3">
-              {sub.title && <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{sub.title} <span className="text-slate-600">({sub.items.length})</span></h3>}
+              {sub.title && <div className="mb-1 flex items-center justify-between gap-2"><h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">{sub.title} <span className="text-slate-600">({sub.items.length})</span></h3>
+                {selecting && <button className="shrink-0 text-xs text-orange-400 underline" onClick={() => toggleGroup(sub.items)}>{allOn(sub.items) ? 'Desmarcar bairro' : 'Marcar bairro'}</button>}</div>}
               <ul className="flex flex-col gap-2">
                 {sub.items.map(c => <Card key={c.id} c={c} open={openId === c.id} owner={isAdmin && c.owner_id ? owners[c.owner_id] : undefined}
-                  onToggle={() => setOpenId(openId === c.id ? null : c.id)} onEdit={() => setEditing(c)} onDelete={() => remove(c)} />)}
+                  selecting={selecting} selected={selIds.includes(c.id)} onToggle={() => (selecting ? toggle(c.id) : setOpenId(openId === c.id ? null : c.id))} onEdit={() => setEditing(c)} onDelete={() => remove(c)} />)}
               </ul>
             </div>
           ))}
         </section>
       ))}
-      <button onClick={() => setEditing(null)} aria-label="Novo cliente" className="fixed bottom-6 right-6 h-16 w-16 rounded-full bg-orange-500 text-4xl font-bold text-slate-900 shadow-lg active:scale-95">+</button>
-      {editing !== undefined && <ClientForm initial={editing} onClose={() => setEditing(undefined)} onSaved={n => { setEditing(undefined); if (n) say(n); load() }} />}
+      {!selecting && <button onClick={() => setEditing(null)} aria-label="Novo cliente" className="fixed bottom-6 right-6 h-16 w-16 rounded-full bg-orange-500 text-4xl font-bold text-slate-900 shadow-lg active:scale-95">+</button>}
+      {selecting && <div className="fixed inset-x-0 bottom-0 bg-slate-900 p-4"><div className="mx-auto max-w-lg"><button disabled={!selIds.length} onClick={() => setBuilding(true)} className="w-full rounded-xl bg-orange-500 py-4 text-lg font-bold text-slate-900 disabled:opacity-40">{selIds.length ? `Continuar com ${selIds.length} cliente${selIds.length > 1 ? 's' : ''}` : 'Toque nos clientes para marcar'}</button></div></div>}
+      {editing !== undefined && <ClientForm initial={editing} restored={pending && pending.id === (editing?.id ?? null) ? pending.data : undefined} onClose={() => { setEditing(undefined); setPending(null) }} onSaved={n => { setEditing(undefined); setPending(null); if (n) say(n); load() }} />}
+      {building && <RouteBuilder clients={selIds.map(id => clients.find(c => c.id === id)).filter(Boolean) as Client[]} onClose={() => setBuilding(false)} onSaved={() => { setBuilding(false); setSelecting(false); setSelIds([]); onRouteSaved?.() }} />}
     </main>
   )
 }
