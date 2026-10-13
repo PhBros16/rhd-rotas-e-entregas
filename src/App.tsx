@@ -6,6 +6,8 @@ import Login from './pages/Login'
 import Admin from './pages/Admin'
 import Clients from './pages/Clients'
 import Routes from './pages/Routes'
+import Stats from './pages/Stats'
+import Couriers from './pages/Couriers'
 import { loadDraft } from './lib/draft'
 
 const Screen = ({ title, text, action }: { title: string; text: string; action?: () => void }) => (
@@ -18,13 +20,13 @@ const Screen = ({ title, text, action }: { title: string; text: string; action?:
 )
 
 function Shell({ admin, userId }: { admin: boolean; userId: string }) {
-  const tabs: [string, string][] = [...(admin ? [['users', 'Usuários'] as [string, string]] : []), ['clients', 'Clientes'], ['routes', 'Rotas']]
-  const [tab, setTab] = useState(admin && !loadDraft() ? 'users' : 'clients')
+  const tabs: [string, string][] = admin ? [['stats', 'Painel'], ['couriers', 'Entregadores'], ['routes', 'Rotas'], ['clients', 'Clientes'], ['users', 'Usuários']] : [['clients', 'Clientes'], ['routes', 'Rotas']]
+  const [tab, setTab] = useState(admin && !loadDraft() ? 'stats' : 'clients')
   useEffect(() => { localDb.routes.filter(r => r.status === 'active' && r.owner_id === userId).count().then(n => { if (n) setTab('routes') }) }, [userId])
   const b = (t: string) => `flex-1 rounded-lg py-2 text-sm font-semibold ${tab === t ? 'bg-orange-500 text-slate-900' : 'bg-slate-800 text-slate-300'}`
   return (<>
-    <div className="mx-auto flex max-w-lg gap-2 p-4 pb-0">{tabs.map(([k, l]) => <button key={k} className={b(k)} onClick={() => setTab(k)}>{l}</button>)}</div>
-    {tab === 'users' ? <Admin /> : tab === 'routes' ? <Routes /> : <Clients onRouteSaved={() => setTab('routes')} />}
+    <div className="mx-auto flex max-w-lg gap-2 overflow-x-auto p-4 pb-0">{tabs.map(([k, l]) => <button key={k} className={`${b(k)} ${admin ? 'shrink-0 px-4' : ''}`} onClick={() => setTab(k)}>{l}</button>)}</div>
+    {tab === 'users' ? <Admin /> : tab === 'stats' ? <Stats /> : tab === 'couriers' ? <Couriers /> : tab === 'routes' ? <Routes /> : <Clients onRouteSaved={() => setTab('routes')} />}
   </>)
 }
 
