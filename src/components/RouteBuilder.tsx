@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Client } from '../lib/clients'
+import { brl } from '../lib/format'
 
 const PRICES = [35, 55, 60, 70, 80, 90, 100, 120]
-export const brl = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+export { brl }
 type Stop = { client: Client; price: number | null; packages: number }
 
 export default function RouteBuilder({ clients, onClose, onSaved }: { clients: Client[]; onClose: () => void; onSaved: () => void }) {
@@ -27,7 +28,7 @@ export default function RouteBuilder({ clients, onClose, onSaved }: { clients: C
       route_id: r.id, client_id: s.client.id, client_name: s.client.name, phone: s.client.phone,
       address: [s.client.street, s.client.number, s.client.complement].filter(Boolean).join(', ') || null,
       neighborhood: s.client.neighborhood, city: s.client.city, lat: s.client.lat, lng: s.client.lng,
-      position: i, packages: s.packages, price: s.price ?? 0,
+      position: i, packages: s.packages, price: s.price ?? 0, pin_url: s.client.pin_url, client_notes: s.client.notes,
     }))
     const { error: e2 } = await supabase.from('route_stops').insert(rows)
     if (e2) { await supabase.from('routes').delete().eq('id', r.id); setBusy(false); setMsg(e2.message); return }
