@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { localDb } from './lib/clients'
 import { AuthProvider, useAuth } from './auth'
 import { configured } from './lib/supabase'
 import Login from './pages/Login'
@@ -16,9 +17,10 @@ const Screen = ({ title, text, action }: { title: string; text: string; action?:
   </main>
 )
 
-function Shell({ admin }: { admin: boolean }) {
+function Shell({ admin, userId }: { admin: boolean; userId: string }) {
   const tabs: [string, string][] = [...(admin ? [['users', 'Usuários'] as [string, string]] : []), ['clients', 'Clientes'], ['routes', 'Rotas']]
   const [tab, setTab] = useState(admin && !loadDraft() ? 'users' : 'clients')
+  useEffect(() => { localDb.routes.filter(r => r.status === 'active' && r.owner_id === userId).count().then(n => { if (n) setTab('routes') }) }, [userId])
   const b = (t: string) => `flex-1 rounded-lg py-2 text-sm font-semibold ${tab === t ? 'bg-orange-500 text-slate-900' : 'bg-slate-800 text-slate-300'}`
   return (<>
     <div className="mx-auto flex max-w-lg gap-2 p-4 pb-0">{tabs.map(([k, l]) => <button key={k} className={b(k)} onClick={() => setTab(k)}>{l}</button>)}</div>
@@ -33,7 +35,7 @@ function Gate() {
   if (!session) return <Login />
   if (!profile || profile.status === 'pending') return <Screen title="Aguardando aprovação" text="Seu cadastro foi enviado. O administrador precisa liberar seu acesso." action={signOut} />
   if (profile.status === 'blocked') return <Screen title="Acesso bloqueado" text="Fale com o administrador." action={signOut} />
-  return <Shell admin={profile.role === 'admin'} />
+  return <Shell admin={profile.role === 'admin'} userId={profile.id} />
 }
 
 export default function App() { return <AuthProvider><Gate /></AuthProvider> }
