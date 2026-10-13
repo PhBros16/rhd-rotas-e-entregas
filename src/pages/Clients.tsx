@@ -133,11 +133,17 @@ export default function Clients({ onRouteSaved }: { onRouteSaved?: () => void })
   const [building, setBuilding] = useState(false)
   const [pending, setPending] = useState<Draft | null>(loadDraft)
 
+  const tried = useRef<Set<string>>(new Set())
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('clients').select('*').order('name')
     if (error || !data) { setOffline(true); setClients(await localDb.clients.toArray()); return }
     setOffline(false); setClients(data as Client[])
     await localDb.clients.clear(); await localDb.clients.bulkPut(data as Client[])
+    for (const c of (data as Client[]).filter(x => x.pin_url && x.lat == null && !tried.current.has(x.id)).slice(0, 5)) { // tenta ler de novo a posição do link
+      tried.current.add(c.id)
+      const p = await resolveCoords(c.pin_url!)
+      if (p) { await supabase.from('clients').update({ lat: p.lat, lng: p.lng }).eq('id', c.id); setClients(cs => cs.map(x => (x.id === c.id ? { ...x, lat: p.lat, lng: p.lng } : x))) }
+    }
   }, [])
   useEffect(() => { load() }, [load])
   useEffect(() => {
