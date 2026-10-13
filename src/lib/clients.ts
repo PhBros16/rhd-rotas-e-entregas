@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import type { Op, RouteRow, StopRow } from './routes'
 
 export type Client = {
   id: string; owner_id?: string; name: string; phone: string | null; cep: string | null
@@ -10,7 +11,14 @@ export type ClientDraft = Omit<Client, 'id' | 'owner_id'>
 
 class LocalDB extends Dexie {
   clients!: Table<Client, string>
-  constructor() { super('rhd'); this.version(1).stores({ clients: 'id, neighborhood, city' }) }
+  routes!: Table<RouteRow, string>
+  stops!: Table<StopRow, string>
+  outbox!: Table<Op, number>
+  constructor() {
+    super('rhd')
+    this.version(1).stores({ clients: 'id, neighborhood, city' })
+    this.version(2).stores({ clients: 'id, neighborhood, city', routes: 'id', stops: 'id, route_id', outbox: '++seq' })
+  }
 }
 export const localDb = new LocalDB()
 

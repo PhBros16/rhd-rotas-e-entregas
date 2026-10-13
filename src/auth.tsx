@@ -22,7 +22,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session) { setProfile(null); return }
     supabase.from('profiles').select('*').eq('id', session.user.id).single()
-      .then(({ data }) => { setProfile(data as Profile | null); setLoading(false) })
+      .then(({ data, error }) => {
+        if (data) { try { localStorage.setItem('rhd:profile', JSON.stringify(data)) } catch { /* ignora */ } setProfile(data as Profile) }
+        else {
+          let cached: Profile | null = null
+          try { cached = JSON.parse(localStorage.getItem('rhd:profile') || 'null') } catch { /* ignora */ }
+          setProfile(error && !error.code && cached?.id === session.user.id ? cached : null)
+        }
+        setLoading(false)
+      })
   }, [session])
 
   const signOut = async () => { await supabase.auth.signOut() }
