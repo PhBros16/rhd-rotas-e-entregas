@@ -39,7 +39,7 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
   const waiting = useLiveQuery(() => localDb.outbox.count(), []) ?? 0
   const [t, setT] = useState(Date.now())
   const [sheet, setSheet] = useState<{ kind: 'deliver' | 'defer' | 'fail'; s: StopRow } | null>(null)
-  const [panel, setPanel] = useState<null | 'nav' | 'menu' | 'backup'>(askBackup ? 'backup' : null)
+  const [panel, setPanel] = useState<null | 'nav' | 'menu' | 'backup' | 'all'>(askBackup ? 'backup' : null)
   const [online, setOnline] = useState(navigator.onLine)
   const [note, setNote] = useState('')
   const notified = useRef<Set<string>>(new Set())
@@ -97,7 +97,7 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
       <div className="sticky top-0 z-10 bg-slate-900/95 px-4 pb-2 pt-3 backdrop-blur"><div className="mx-auto max-w-lg">
         <div className="flex items-center gap-2"><button onClick={onClose} className={btn}>←</button><p className="min-w-0 flex-1 truncate font-bold">{route.name}</p><button onClick={() => setPanel('menu')} className={btn} aria-label="Menu">⋯</button></div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-orange-500 transition-all" style={{ width: `${pctDone}%` }} /></div>
-        <p className="mt-1 text-xs text-slate-400">{m.delivered} de {m.total} feitas · {brl(m.received)} · {route.go_at ? fmtDur(t - new Date(route.go_at).getTime()) : ''}</p>
+        <p className="mt-1 flex items-center justify-between text-sm"><span className="font-semibold">{m.delivered}/{m.total} entregues</span><span className="font-extrabold text-emerald-400">💼 {brl(m.courierPay)}</span><span className="text-slate-400">{route.go_at ? fmtDur(t - new Date(route.go_at).getTime()) : ''}</span></p>
       </div></div>
 
       <div className="mx-auto max-w-lg px-4 pb-64 pt-2">
@@ -160,8 +160,10 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
         <a onClick={() => setPanel(null)} href={mapsUrl(stopDest(next))} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-800 py-4 text-center text-lg font-bold">Google Maps</a>
         <a onClick={() => setPanel(null)} href={wazeUrl(stopDest(next))} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-800 py-4 text-center text-lg font-bold">Waze</a></div></Sheet>}
       {panel === 'menu' && <Sheet title="Menu da rota" onClose={() => setPanel(null)}><div className="flex flex-col gap-2">
+        <button onClick={() => setPanel('all')} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">📋 Ver rota completa</button>
         <button onClick={sendBackup} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">📤 Enviar backup das pendentes</button>
         <button onClick={finish} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">🏁 Finalizar rota</button></div></Sheet>}
+      {panel === 'all' && <Sheet title={`Rota completa (${byPos.length})`} onClose={() => setPanel(null)}><ul className="flex flex-col gap-1">{byPos.map((s, i) => <li key={s.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-800 p-3"><div className="min-w-0"><p className="truncate font-semibold"><span className="text-slate-500">{i + 1}.</span> {s.status === 'delivered' ? '✅' : s.status === 'pending' ? (s.deferred ? '⏳' : '•') : '❌'} {s.client_name}</p><p className="truncate text-sm text-slate-400">{s.neighborhood} · {brl(Number(s.price))} · 💼 {brl(Number(s.courier_pay ?? 0))}</p></div>{s.status === 'pending' && s !== next && <button onClick={() => { void doNow(s); setPanel(null) }} className={`${btn} shrink-0`}>Agora</button>}</li>)}</ul></Sheet>}
       {panel === 'backup' && <Sheet title="Rota iniciada! 🚀" onClose={() => setPanel(null)}>
         <p className="mb-4 text-slate-300">Envie o <b>backup</b> das entregas para o seu WhatsApp. Se o app falhar no meio do caminho, você continua com a lista completa: endereços, valores, telefones e localizações.</p>
         <button onClick={sendBackup} className="mb-2 w-full rounded-xl bg-orange-500 py-4 text-lg font-bold text-slate-900">📤 Enviar backup agora</button>
