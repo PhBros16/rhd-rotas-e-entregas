@@ -9,7 +9,7 @@ export type StopRow = {
   pay_method: 'pix' | 'cash' | null; paid_amount: number | null; pay_differs: boolean
   delivered_at: string | null; received_by: string | null; notes: string | null
   deferred: boolean; retry_at: string | null; attempt_count: number
-  pin_url: string | null; client_notes: string | null; courier_pay: number
+  pin_url: string | null; client_notes: string | null; courier_pay: number; geo_quality: string | null
 }
 export type RouteRow = {
   id: string; owner_id: string; name: string | null; status: 'draft' | 'active' | 'finished' | 'cancelled'
@@ -113,3 +113,10 @@ export function summarize(stops: StopRow[]) {
     diffs: done.filter(s => s.pay_differs), retried: done.filter(s => s.attempt_count > 1),
   }
 }
+
+/** Reordena a fila: os novos lugares usam os mesmos números de posição que a fila já ocupava. */
+export async function reorder(ordered: StopRow[]) {
+  const slots = ordered.map(s => s.position).sort((a, b) => a - b)
+  for (let i = 0; i < ordered.length; i++) if (ordered[i].position !== slots[i]) await patchStop(ordered[i].id, { position: slots[i] })
+}
+export async function undefer(s: StopRow) { await patchStop(s.id, { deferred: false, retry_at: null }) }

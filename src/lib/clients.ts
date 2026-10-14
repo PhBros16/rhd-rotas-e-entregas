@@ -5,7 +5,7 @@ export type Client = {
   id: string; owner_id?: string; name: string; phone: string | null; cep: string | null
   street: string | null; number: string | null; complement: string | null
   neighborhood: string | null; city: string; pin_url: string | null; notes: string | null
-  lat: number | null; lng: number | null
+  lat: number | null; lng: number | null; geo_quality: string | null
 }
 export type ClientDraft = Omit<Client, 'id' | 'owner_id'>
 
@@ -23,7 +23,7 @@ class LocalDB extends Dexie {
 export const localDb = new LocalDB()
 
 export const CITIES = ['Recife', 'Jaboatão dos Guararapes', 'Olinda', 'Paulista', 'Camaragibe', 'São Lourenço da Mata', 'Cabo de Santo Agostinho']
-export const emptyDraft = (): ClientDraft => ({ name: '', phone: '', cep: '', street: '', number: '', complement: '', neighborhood: '', city: 'Recife', pin_url: '', notes: '', lat: null, lng: null })
+export const emptyDraft = (): ClientDraft => ({ name: '', phone: '', cep: '', street: '', number: '', complement: '', neighborhood: '', city: 'Recife', pin_url: '', notes: '', lat: null, lng: null, geo_quality: null })
 
 export const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 export const digits = (s: string) => s.replace(/\D/g, '')

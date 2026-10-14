@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth'
 import { CITIES, digits, emptyDraft, localDb, lookupCep, norm, type Client, type ClientDraft } from '../lib/clients'
 import { fmtCep, fmtPhone, mapsUrl, wazeUrl, whatsUrl } from '../lib/maplink'
+import { afterClientSave, geocodeClients } from '../lib/geo'
 import RouteBuilder from '../components/RouteBuilder'
 import { clearDraft, loadDraft, saveDraft, type Draft } from '../lib/draft'
 
@@ -37,10 +38,14 @@ function ClientForm({ initial, restored, onClose, onSaved }: { initial: Client |
       street: d.street?.trim() || null, number: d.number?.trim() || null, complement: d.complement?.trim() || null,
       neighborhood: d.neighborhood?.trim() || null, city: d.city.trim(), notes: d.notes?.trim() || null }
     const key = (x: Record<string, unknown>) => [x.cep, x.street, x.number, x.neighborhood, x.city].map(v => String(v ?? '').trim().toLowerCase()).join('|')
-    if (initial && key(initial as unknown as Record<string, unknown>) !== key(row)) { row.lat = null; row.lng = null }
-    const { error } = initial ? await supabase.from('clients').update(row).eq('id', initial.id) : await supabase.from('clients').insert(row)
+    const addrChanged = !initial || key(initial as unknown as Record<string, unknown>) !== key(row)
+    if (initial && addrChanged) { row.lat = null; row.lng = null; row.geo_quality = null }
+    let error: { message: string } | null = null, savedId = initial?.id ?? null
+    if (initial) ({ error } = await supabase.from('clients').update(row).eq('id', initial.id))
+    else { const r = await supabase.from('clients').insert(row).select('id').single(); error = r.error; savedId = r.data?.id ?? null }
     setBusy(false)
-    if (error) setMsg(error.message); else { clearDraft(); onSaved() }
+    if (error) setMsg(error.message)
+    else { clearDraft(); onSaved(); if (savedId) void afterClientSave(savedId, addrChanged) }
   }
 
   return (
@@ -123,11 +128,14 @@ export default function Clients({ onRouteSaved }: { onRouteSaved?: () => void })
   const [building, setBuilding] = useState(false)
   const [pending, setPending] = useState<Draft | null>(loadDraft)
 
+  const tried = useRef<Set<string>>(new Set())
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('clients').select('*').order('name')
     if (error || !data) { setOffline(true); setClients(await localDb.clients.toArray()); return }
     setOffline(false); setClients(data as Client[])
     await localDb.clients.clear(); await localDb.clients.bulkPut(data as Client[])
+    const todo = (data as Client[]).filter(c => !c.geo_quality && !tried.current.has(c.id)).slice(0, 6) // localiza em segundo plano quem ainda não foi localizado
+    if (todo.length) { todo.forEach(c => tried.current.add(c.id)); void geocodeClients(todo.map(c => c.id)).then(() => load()) }
   }, [])
   useEffect(() => { load() }, [load])
   useEffect(() => {
