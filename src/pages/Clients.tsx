@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth'
 import { CITIES, digits, emptyDraft, localDb, lookupCep, norm, type Client, type ClientDraft } from '../lib/clients'
-import { extractUrl, fmtCep, fmtPhone, mapsUrl, resolveCoords, wazeUrl, whatsUrl } from '../lib/maplink'
-import MiniMap from '../components/MiniMap'
+import { fmtCep, fmtPhone, mapsUrl, wazeUrl, whatsUrl } from '../lib/maplink'
 import RouteBuilder from '../components/RouteBuilder'
 import { clearDraft, loadDraft, saveDraft, type Draft } from '../lib/draft'
 
@@ -34,20 +33,14 @@ function ClientForm({ initial, restored, onClose, onSaved }: { initial: Client |
 
   async function save(e: FormEvent) {
     e.preventDefault(); setBusy(true); setMsg('')
-    const pin = extractUrl(d.pin_url ?? '')
-    let lat = d.lat, lng = d.lng, note: string | undefined
-    if (!pin) { lat = null; lng = null }
-    else if (pin !== initial?.pin_url || lat == null) {
-      const c = await resolveCoords(pin)
-      lat = c?.lat ?? null; lng = c?.lng ?? null
-      if (!c) note = 'Cliente salvo, mas não consegui ler a posição do link (o mapinha não será exibido).'
-    }
-    const row = { name: d.name.trim(), phone: digits(d.phone ?? '') || null, cep: digits(d.cep ?? '') || null,
+    const row: Record<string, unknown> = { name: d.name.trim(), phone: digits(d.phone ?? '') || null, cep: digits(d.cep ?? '') || null,
       street: d.street?.trim() || null, number: d.number?.trim() || null, complement: d.complement?.trim() || null,
-      neighborhood: d.neighborhood?.trim() || null, city: d.city.trim(), pin_url: pin || null, lat, lng, notes: d.notes?.trim() || null }
+      neighborhood: d.neighborhood?.trim() || null, city: d.city.trim(), notes: d.notes?.trim() || null }
+    const key = (x: Record<string, unknown>) => [x.cep, x.street, x.number, x.neighborhood, x.city].map(v => String(v ?? '').trim().toLowerCase()).join('|')
+    if (initial && key(initial as unknown as Record<string, unknown>) !== key(row)) { row.lat = null; row.lng = null }
     const { error } = initial ? await supabase.from('clients').update(row).eq('id', initial.id) : await supabase.from('clients').insert(row)
     setBusy(false)
-    if (error) setMsg(error.message); else { clearDraft(); onSaved(note) }
+    if (error) setMsg(error.message); else { clearDraft(); onSaved() }
   }
 
   return (
@@ -63,7 +56,6 @@ function ClientForm({ initial, restored, onClose, onSaved }: { initial: Client |
         <input className={field} placeholder="Bairro *" value={d.neighborhood ?? ''} onChange={set('neighborhood')} required />
         <input className={field} list="cities" placeholder="Cidade *" value={d.city} onChange={set('city')} required />
         <datalist id="cities">{CITIES.map(c => <option key={c} value={c} />)}</datalist>
-        <input className={field} placeholder="Link da localização (cole o link do Maps)" inputMode="url" value={d.pin_url ?? ''} onChange={set('pin_url')} />
         <textarea className={field} placeholder="Observações (portaria, referência…)" rows={2} value={d.notes ?? ''} onChange={set('notes')} />
         {msg && <p className="text-sm text-amber-300">{msg}</p>}
         <div className="fixed inset-x-0 bottom-0 bg-slate-900 p-4"><div className="mx-auto flex max-w-lg gap-3">
@@ -97,8 +89,6 @@ function Card({ c, open, owner, selecting, selected, onToggle, onEdit, onDelete 
             <p>{[c.street, c.number, c.complement].filter(Boolean).join(', ') || 'Sem endereço'}</p>
             <p className="text-slate-400">{[c.neighborhood, c.city].filter(Boolean).join(' · ')}{c.cep ? ` · CEP ${fmtCep(c.cep)}` : ''}</p>
           </div>
-          {pos && <MiniMap lat={pos.lat} lng={pos.lng} href={c.pin_url?.startsWith('http') ? c.pin_url : mapsUrl(pos)} label={addr(c) || c.name} />}
-          {!pos && c.pin_url && <a href={c.pin_url} target="_blank" rel="noreferrer" className="text-orange-400 underline">Abrir link da localização</a>}
           {c.notes && <p className="rounded-lg bg-slate-700/50 p-2 text-slate-300">{c.notes}</p>}
           <div className="flex flex-wrap gap-2">
             {c.phone && <a className={chip} href={whatsUrl(c.phone)} target="_blank" rel="noreferrer">WhatsApp</a>}
@@ -133,17 +123,11 @@ export default function Clients({ onRouteSaved }: { onRouteSaved?: () => void })
   const [building, setBuilding] = useState(false)
   const [pending, setPending] = useState<Draft | null>(loadDraft)
 
-  const tried = useRef<Set<string>>(new Set())
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('clients').select('*').order('name')
     if (error || !data) { setOffline(true); setClients(await localDb.clients.toArray()); return }
     setOffline(false); setClients(data as Client[])
     await localDb.clients.clear(); await localDb.clients.bulkPut(data as Client[])
-    for (const c of (data as Client[]).filter(x => x.pin_url && x.lat == null && !tried.current.has(x.id)).slice(0, 5)) { // tenta ler de novo a posição do link
-      tried.current.add(c.id)
-      const p = await resolveCoords(c.pin_url!)
-      if (p) { await supabase.from('clients').update({ lat: p.lat, lng: p.lng }).eq('id', c.id); setClients(cs => cs.map(x => (x.id === c.id ? { ...x, lat: p.lat, lng: p.lng } : x))) }
-    }
   }, [])
   useEffect(() => { load() }, [load])
   useEffect(() => {
