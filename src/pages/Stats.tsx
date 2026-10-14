@@ -33,6 +33,13 @@ export default function Stats() {
       <Period value={range} onChange={setRange} />
       {ready && rs.length === 0 && <p className="mt-10 text-center text-slate-400">Nenhuma rota iniciada neste período.</p>}
       {rs.length > 0 && <>
+        <div className="mb-4 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-slate-800 p-4 ring-1 ring-emerald-500/30">
+          <p className={h}>💰 Financeiro</p>
+          <div className="flex justify-between py-1"><span className="text-slate-300">Recebido das entregas</span><b className="text-lg">{brl(a.received)}</b></div>
+          <div className="flex justify-between py-1"><span className="text-slate-300">🤝 Repasse aos entregadores</span><b className="text-lg">{brl(a.courierPay)}</b></div>
+          <div className="mt-1 flex justify-between border-t border-slate-600 pt-2"><span className="text-slate-300">🏢 Fica com a empresa</span><b className="text-xl text-emerald-400">{brl(a.received - a.courierPay)}</b></div>
+          <p className="mt-2 text-xs text-slate-500">Pix {brl(a.pix)} · Dinheiro {brl(a.cash)}</p>
+        </div>
         <div className="mb-4 grid grid-cols-2 gap-2">
           {kpi('✅ Entregas feitas', String(a.delivered), `${a.finished} rota(s) finalizada(s)`)}{kpi('❌ Não entregues', String(a.failed + a.skipped), `sucesso ${pct(a.success)}`)}
           {kpi('📦 Pacotes', String(a.packages))}{kpi('💰 Recebido', brl(a.received), `previsto ${brl(a.planned)}`)}

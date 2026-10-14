@@ -84,6 +84,7 @@ export default function Routes() {
         {stat('Entregas feitas', `${total.delivered} de ${total.total}`)}{stat('Não entregues', total.failed + total.skipped)}
         {stat('Pacotes entregues', total.packages)}{stat('Previsto', brl(total.planned))}
         {stat('Recebido', brl(total.received))}{stat('Pix · Dinheiro', `${brl(total.pix)} · ${brl(total.cash)}`)}
+        {admin ? <>{stat('🤝 Repasse aos entregadores', brl(total.courierPay))}{stat('🏢 Fica com a empresa', brl(total.received - total.courierPay))}</> : stat('💼 Você recebe', brl(total.courierPay))}
       </div>}
 
       {routes && list.length === 0 && <p className="mt-10 text-center text-slate-400">{(routes.length ? 'Nenhuma rota neste filtro.' : 'Nenhuma rota ainda. Em Clientes, toque em “Montar rota”.')}</p>}

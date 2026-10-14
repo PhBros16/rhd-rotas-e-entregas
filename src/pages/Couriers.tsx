@@ -33,7 +33,7 @@ export default function Couriers() {
           <li key={p.id} className="rounded-2xl bg-slate-800">
             <button onClick={() => setOpen(open === p.id ? null : p.id)} className="flex w-full items-start justify-between gap-2 p-4 text-left">
               <div className="min-w-0"><p className="font-bold">{p.full_name || p.username} {p.role === 'admin' && <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs font-normal text-slate-300">admin</span>}</p>
-                <p className="text-sm text-slate-400">{a.delivered} entrega(s) · {a.finished} rota(s) · {brl(a.received)}</p></div>
+                <p className="text-sm text-slate-400">{a.delivered} entrega(s) · {a.finished} rota(s) · repasse {brl(a.courierPay)}</p></div>
               <span className="text-slate-500">{open === p.id ? '▴' : '▾'}</span>
             </button>
             {open === p.id && (
@@ -41,7 +41,7 @@ export default function Couriers() {
                 <div className="mb-3 grid grid-cols-2 gap-2">
                   {kv('✅ Entregas', String(a.delivered))}{kv('❌ Não entregues', String(a.failed + a.skipped))}
                   {kv('📦 Pacotes', String(a.packages))}{kv('🎯 Sucesso', pct(a.success))}
-                  {kv('💰 Recebido', brl(a.received))}{kv('💠 Pix · 💵 Din.', `${brl(a.pix)} · ${brl(a.cash)}`)}
+                  {kv('💰 Arrecadou', brl(a.received))}{kv('🤝 Repasse devido', brl(a.courierPay))}{kv('💠 Pix · 💵 Din.', `${brl(a.pix)} · ${brl(a.cash)}`)}
                   {kv('⏱ Tempo/entrega', fmtMin(a.avgPerDeliveryMin))}{kv('🕐 Rota média', fmtMin(a.avgRouteMin))}
                   {kv('🎟 Ticket médio', brl(a.avgTicket))}{kv('👥 Clientes', String(owned[p.id] ?? 0))}
                 </div>
