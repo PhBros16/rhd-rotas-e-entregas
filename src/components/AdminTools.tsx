@@ -16,9 +16,9 @@ function FeeCard() {
     if (error) setMsg(error.message); else { setCur(n); setMsg('Salvo. Vale para as próximas rotas montadas.') }
   }
   return (
-    <div className={card}><p className={h}>💼 Valor pago ao entregador por entrega</p>
+    <div className={card}><p className={h}>💼 Valor padrão por entrega (para quem não tem valor próprio)</p>
       <div className="flex gap-2"><input inputMode="decimal" placeholder="R$ por entrega" value={v} onChange={e => { setV(e.target.value); setMsg('') }} className="min-w-0 flex-1 rounded-xl bg-slate-900 px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-500" /><button onClick={save} className="rounded-xl bg-emerald-500 px-5 font-bold text-slate-900">Salvar</button></div>
-      <p className="mt-2 text-xs text-slate-400">{cur === null ? '' : cur === 0 ? '⚠️ Ainda não definido: as rotas montadas ficam com repasse R$ 0.' : `Atual: ${brl(cur)} por entrega, igual para todos, qualquer tamanho. `}{msg}</p>
+      <p className="mt-2 text-xs text-slate-400">{cur === null ? '' : cur === 0 ? '⚠️ Ainda não definido: as rotas montadas ficam com repasse R$ 0.' : `Padrão atual: ${brl(cur)} por entrega, igual para qualquer tamanho. Cada entregador pode ter um valor próprio no perfil dele. `}{msg}</p>
     </div>
   )
 }

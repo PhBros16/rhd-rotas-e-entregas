@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Client } from '../lib/clients'
 import { brl } from '../lib/format'
+import { useAuth } from '../auth'
 
 export { brl }
 const PRICES = [35, 55, 60, 70, 80, 90, 100, 120]
@@ -14,7 +15,12 @@ export default function RouteBuilder({ clients, onClose, onSaved }: { clients: C
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [fee, setFee] = useState<number | null>(null)
-  useEffect(() => { supabase.from('app_settings').select('value').eq('key', 'courier_fee').single().then(({ data }) => setFee(data ? Number(data.value) : 0)) }, [])
+  const { profile } = useAuth()
+  useEffect(() => {
+    if (!profile) return
+    Promise.all([supabase.from('profiles').select('pay_rate').eq('id', profile.id).single(), supabase.from('app_settings').select('value').eq('key', 'courier_fee').single()])
+      .then(([me, std]) => setFee(me.data?.pay_rate != null ? Number(me.data.pay_rate) : std.data ? Number(std.data.value) : 0))
+  }, [profile])
   const patch = (i: number, p: Partial<Stop>) => setStops(s => s.map((x, j) => (j === i ? { ...x, ...p } : x)))
   const total = stops.reduce((a, s) => a + (s.price ?? 0), 0)
   const totalPay = (fee ?? 0) * stops.length
