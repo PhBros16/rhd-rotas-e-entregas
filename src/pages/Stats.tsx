@@ -4,14 +4,10 @@ import { useRouteData } from '../lib/data'
 import { aggregate, byDay, inRange, top, type Range } from '../lib/stats'
 import { brl, fmtMin, pct } from '../lib/format'
 import Period from '../components/Period'
+import { Bars } from '../components/Bars'
 
 const card = 'mb-4 rounded-2xl bg-slate-800 p-4'
 const h = 'mb-3 text-xs font-bold uppercase tracking-wider text-orange-300'
-
-function Bars({ items, fmt }: { items: { name: string; n: number; sub?: string }[]; fmt?: (n: number) => string }) {
-  const max = Math.max(1, ...items.map(i => i.n))
-  return <ul className="flex flex-col gap-2">{items.map(i => <li key={i.name}><div className="mb-1 flex justify-between gap-2 text-sm"><span className="truncate">{i.name}</span><span className="shrink-0 text-slate-400">{fmt ? fmt(i.n) : i.n}{i.sub ? ` · ${i.sub}` : ''}</span></div><div className="h-2 rounded-full bg-slate-700"><div className="h-2 rounded-full bg-orange-500" style={{ width: `${(i.n / max) * 100}%` }} /></div></li>)}</ul>
-}
 
 export default function Stats() {
   const { routes, by, ready } = useRouteData()

@@ -36,8 +36,12 @@ export function byDay(routes: RouteRow[], by: Map<string, StopRow[]>) {
 export type Range = { from: string; to: string }
 export const inRange = (r: RouteRow, { from, to }: Range) => { const d = routeDay(r); return (!from || d >= from) && (!to || d <= to) }
 const key = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-export const presets = (): [string, Range][] => {
-  const t = new Date(), w = new Date(t), mo = new Date(t.getFullYear(), t.getMonth(), 1)
-  w.setDate(t.getDate() - 6)
-  return [['Hoje', { from: key(t), to: key(t) }], ['7 dias', { from: key(w), to: key(t) }], ['Este mês', { from: key(mo), to: key(t) }], ['Tudo', { from: '', to: '' }]]
+export const ranges = () => {
+  const t = new Date(), dow = (t.getDay() + 6) % 7 // 0 = segunda
+  const mon = new Date(t); mon.setDate(t.getDate() - dow)
+  const lastMon = new Date(mon); lastMon.setDate(mon.getDate() - 7)
+  const lastSun = new Date(mon); lastSun.setDate(mon.getDate() - 1)
+  const month = new Date(t.getFullYear(), t.getMonth(), 1)
+  return { today: { from: key(t), to: key(t) }, week: { from: key(mon), to: key(t) }, lastWeek: { from: key(lastMon), to: key(lastSun) }, month: { from: key(month), to: key(t) }, all: { from: '', to: '' } }
 }
+export const presets = (): [string, Range][] => { const r = ranges(); return [['Hoje', r.today], ['Esta semana', r.week], ['Semana passada', r.lastWeek], ['Este mês', r.month], ['Tudo', r.all]] }

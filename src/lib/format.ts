@@ -7,3 +7,4 @@ export const fmtMin = (m: number) => (m > 0 ? fmtDur(m * 60000) : '—')
 export const dayKeyOf = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
 export const dayLabel = (k: string) => new Date(`${k}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
 export const pct = (x: number) => `${Math.round(x * 100)}%`
+export const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
