@@ -13,7 +13,7 @@ export type StopRow = {
 }
 export type RouteRow = {
   id: string; owner_id: string; name: string | null; status: 'draft' | 'active' | 'finished' | 'cancelled'
-  go_at: string | null; finished_at: string | null; created_at: string
+  go_at: string | null; finished_at: string | null; created_at: string; payout_id: string | null
 }
 export type Op = { seq?: number; table: 'routes' | 'route_stops' | 'stop_attempts'; op: 'update' | 'insert'; id: string; data: Record<string, unknown> }
 

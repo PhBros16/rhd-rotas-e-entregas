@@ -16,6 +16,13 @@ export function aggregate(routes: RouteRow[], by: Map<string, StopRow[]>) {
     diffBalance: m.diffs.reduce((t, s) => t + Number(s.paid_amount ?? 0) - Number(s.price), 0) }
 }
 
+/** Rotas finalizadas ainda não quitadas por um repasse. */
+export function pendingPayout(routes: RouteRow[], by: Map<string, StopRow[]>) {
+  const rs = routes.filter(r => r.status === 'finished' && !r.payout_id)
+  const a = aggregate(rs, by)
+  return { routes: rs, amount: a.courierPay, deliveries: a.delivered }
+}
+
 export function top(stops: StopRow[], key: (s: StopRow) => string, n = 6, only: 'delivered' | 'lost' = 'delivered') {
   const m = new Map<string, { name: string; n: number; value: number }>()
   for (const s of stops.filter(x => (only === 'delivered' ? x.status === 'delivered' : x.status === 'failed' || x.status === 'skipped'))) {
