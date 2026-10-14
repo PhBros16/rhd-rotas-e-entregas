@@ -4,6 +4,7 @@ import { useRouteData } from '../lib/data'
 import { aggregate, inRange, top, type Range } from '../lib/stats'
 import { brl, fmtDate, fmtMin, pct } from '../lib/format'
 import Period from '../components/Period'
+import AdminTools from '../components/AdminTools'
 
 type P = { id: string; full_name: string; username: string; role: string; status: string }
 
@@ -26,6 +27,7 @@ export default function Couriers() {
   return (
     <main className="mx-auto max-w-lg p-4 pb-10">
       <header className="mb-3 flex items-center gap-3"><img src="/favicon.svg" alt="" className="h-10 w-10" /><div><h1 className="font-bold">Entregadores</h1><p className="text-sm text-slate-400">{rows.length} ativo(s)</p></div></header>
+      <AdminTools />
       <Period value={range} onChange={setRange} />
       {ready && rows.length === 0 && <p className="mt-10 text-center text-slate-400">Nenhum entregador ativo.</p>}
       <ul className="flex flex-col gap-3">
