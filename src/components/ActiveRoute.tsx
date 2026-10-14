@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { localDb } from '../lib/clients'
-import { doNow, finishRoute, summarize, undo, type StopRow } from '../lib/routes'
+import { doNow, finishRoute, refresh, summarize, undo, type StopRow } from '../lib/routes'
 import { fmtPhone, mapsUrl, wazeUrl, whatsUrl } from '../lib/maplink'
 import { brl, fmtDur, fmtTime } from '../lib/format'
 import { buildBackup, shareText, stopDest } from '../lib/report'
 import RouteSummary from './RouteSummary'
 import { DeferSheet, DeliverSheet, FailSheet, Sheet, btn } from './StopSheets'
+import { InsertSheet, OptimizeSheet } from './RoutePlanner'
 
 const left = (iso: string | null, t: number) => { if (!iso) return 'no fim da rota'; const m = Math.round((new Date(iso).getTime() - t) / 60000); return m > 0 ? `volta em ${m} min` : m === 0 ? 'hora de voltar' : `atrasada ${-m} min` }
 const isDue = (s: StopRow, t: number) => s.deferred && !!s.retry_at && new Date(s.retry_at).getTime() <= t
@@ -42,9 +43,12 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
   const [panel, setPanel] = useState<null | 'nav' | 'menu' | 'backup' | 'all'>(askBackup ? 'backup' : null)
   const [online, setOnline] = useState(navigator.onLine)
   const [note, setNote] = useState('')
+  const [plan, setPlan] = useState<null | { kind: 'optimize' } | { kind: 'insert'; s: StopRow }>(null)
+  const [afterOpt, setAfterOpt] = useState(false)
   const notified = useRef<Set<string>>(new Set())
 
   useEffect(() => { const i = setInterval(() => setT(Date.now()), 20000); return () => clearInterval(i) }, [])
+  useEffect(() => { const i = setInterval(() => void refresh(), 60000); return () => clearInterval(i) }, []) // traz edições de endereço feitas por outros
   useEffect(() => {
     const on = () => setOnline(true), off = () => setOnline(false)
     window.addEventListener('online', on); window.addEventListener('offline', off)
@@ -103,7 +107,7 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
       <div className="mx-auto max-w-lg px-4 pb-64 pt-2">
         {(waiting > 0 || !online) && <p className="mb-3 rounded-lg bg-amber-500/20 p-2 text-sm text-amber-300">{!online ? 'Sem internet. ' : ''}{waiting > 0 ? `${waiting} ação(ões) salva(s) no aparelho. Enviando quando a conexão voltar.` : 'Suas ações ficam salvas no aparelho.'}</p>}
         {note && <p className="mb-3 rounded-lg bg-emerald-500/20 p-2 text-sm text-emerald-200">{note}</p>}
-        {due.length > 0 && <div className="mb-3 rounded-xl bg-orange-500 p-3 text-slate-900"><p className="font-bold">⏰ Hora de voltar</p>{due.map(s => <div key={s.id} className="mt-1 flex items-center justify-between gap-2"><span className="truncate font-medium">{s.client_name}</span><button onClick={() => doNow(s)} className="shrink-0 rounded-lg bg-slate-900 px-3 py-1 font-semibold text-white">Fazer agora</button></div>)}</div>}
+        {due.length > 0 && <div className="mb-3 rounded-xl bg-orange-500 p-3 text-slate-900"><p className="font-bold">⏰ Hora de voltar</p>{due.map(s => <div key={s.id} className="mt-1 flex items-center justify-between gap-2"><span className="truncate font-medium">{s.client_name}</span><button onClick={() => setPlan({ kind: 'insert', s })} className="shrink-0 rounded-lg bg-slate-900 px-3 py-1 font-semibold text-white">Fazer agora</button></div>)}</div>}
 
         {next ? (
           <section className="mb-4 pt-2">
@@ -137,7 +141,7 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
           <ul className="flex flex-col gap-1">{queue.slice(1).map((s, i) => <li key={s.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-800 p-3"><div className="min-w-0"><p className="truncate font-semibold"><span className="text-slate-500">{finished + i + 2}.</span> {s.client_name}</p><p className="truncate text-sm text-slate-400">{s.neighborhood} · {brl(Number(s.price))}</p></div><button onClick={() => doNow(s)} className={`${btn} shrink-0`}>Agora</button></li>)}</ul>
         </Fold>
         <Fold title="⏳ Para voltar" count={later.length} tone="text-orange-300">
-          <ul className="flex flex-col gap-1">{later.map(s => <li key={s.id} className={`flex items-center justify-between gap-2 rounded-xl p-3 ${isDue(s, t) ? 'bg-orange-500/20' : 'bg-slate-800'}`}><div className="min-w-0"><p className="truncate font-semibold">{s.client_name}</p><p className="truncate text-sm text-slate-400">{left(s.retry_at, t)}{s.retry_at ? ` (${fmtTime(s.retry_at)})` : ''}{s.notes ? ` · ${s.notes}` : ''}</p></div><button onClick={() => doNow(s)} className={`${btn} shrink-0`}>Agora</button></li>)}</ul>
+          <ul className="flex flex-col gap-1">{later.map(s => <li key={s.id} className={`flex items-center justify-between gap-2 rounded-xl p-3 ${isDue(s, t) ? 'bg-orange-500/20' : 'bg-slate-800'}`}><div className="min-w-0"><p className="truncate font-semibold">{s.client_name}</p><p className="truncate text-sm text-slate-400">{left(s.retry_at, t)}{s.retry_at ? ` (${fmtTime(s.retry_at)})` : ''}{s.notes ? ` · ${s.notes}` : ''}</p></div><button onClick={() => setPlan({ kind: 'insert', s })} className={`${btn} shrink-0`}>Agora</button></li>)}</ul>
         </Fold>
         <Fold title="✓ Concluídas" count={done.length}>
           <ul className="flex flex-col gap-1">{done.map(s => <li key={s.id} className="flex items-start justify-between gap-2 rounded-xl bg-slate-800 p-3"><div className="min-w-0"><p className="truncate font-semibold">{s.status === 'delivered' ? '✅' : '❌'} {s.client_name}</p>
@@ -153,6 +157,8 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
         </>) : <button onClick={finish} className="w-full rounded-2xl bg-orange-500 py-5 text-xl font-extrabold text-slate-900">Finalizar rota</button>}
       </div></div>
 
+      {plan?.kind === 'insert' && <InsertSheet stop={plan.s} stops={stops} onClose={() => setPlan(null)} onDone={m => { setNote(m); setPlan(null) }} />}
+      {plan?.kind === 'optimize' && <OptimizeSheet stops={stops} fixFirst={m.delivered > 0} onClose={() => { setPlan(null); if (afterOpt) setPanel('backup') }} onDone={msg => { setNote(msg); setPlan(null); if (afterOpt) setPanel('backup') }} />}
       {sheet?.kind === 'deliver' && <DeliverSheet s={sheet.s} onClose={() => setSheet(null)} />}
       {sheet?.kind === 'defer' && <DeferSheet s={sheet.s} onClose={() => setSheet(null)} />}
       {sheet?.kind === 'fail' && <FailSheet s={sheet.s} onClose={() => setSheet(null)} />}
@@ -160,12 +166,14 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
         <a onClick={() => setPanel(null)} href={mapsUrl(stopDest(next))} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-800 py-4 text-center text-lg font-bold">Google Maps</a>
         <a onClick={() => setPanel(null)} href={wazeUrl(stopDest(next))} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-800 py-4 text-center text-lg font-bold">Waze</a></div></Sheet>}
       {panel === 'menu' && <Sheet title="Menu da rota" onClose={() => setPanel(null)}><div className="flex flex-col gap-2">
+        <button onClick={() => { setPanel(null); setAfterOpt(false); setPlan({ kind: 'optimize' }) }} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">🧭 Organizar a melhor ordem</button>
         <button onClick={() => setPanel('all')} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">📋 Ver rota completa</button>
         <button onClick={sendBackup} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">📤 Enviar backup das pendentes</button>
         <button onClick={finish} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">🏁 Finalizar rota</button></div></Sheet>}
-      {panel === 'all' && <Sheet title={`Rota completa (${byPos.length})`} onClose={() => setPanel(null)}><ul className="flex flex-col gap-1">{byPos.map((s, i) => <li key={s.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-800 p-3"><div className="min-w-0"><p className="truncate font-semibold"><span className="text-slate-500">{i + 1}.</span> {s.status === 'delivered' ? '✅' : s.status === 'pending' ? (s.deferred ? '⏳' : '•') : '❌'} {s.client_name}</p><p className="truncate text-sm text-slate-400">{s.neighborhood} · {brl(Number(s.price))} · 💼 {brl(Number(s.courier_pay ?? 0))}</p></div>{s.status === 'pending' && s !== next && <button onClick={() => { void doNow(s); setPanel(null) }} className={`${btn} shrink-0`}>Agora</button>}</li>)}</ul></Sheet>}
+      {panel === 'all' && <Sheet title={`Rota completa (${byPos.length})`} onClose={() => setPanel(null)}><ul className="flex flex-col gap-1">{byPos.map((s, i) => <li key={s.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-800 p-3"><div className="min-w-0"><p className="truncate font-semibold"><span className="text-slate-500">{i + 1}.</span> {s.status === 'delivered' ? '✅' : s.status === 'pending' ? (s.deferred ? '⏳' : '•') : '❌'} {s.client_name}</p><p className="truncate text-sm text-slate-400">{s.neighborhood} · {brl(Number(s.price))} · 💼 {brl(Number(s.courier_pay ?? 0))}</p></div>{s.status === 'pending' && s !== next && <button onClick={() => { if (s.deferred) setPlan({ kind: 'insert', s }); else void doNow(s); setPanel(null) }} className={`${btn} shrink-0`}>Agora</button>}</li>)}</ul></Sheet>}
       {panel === 'backup' && <Sheet title="Rota iniciada! 🚀" onClose={() => setPanel(null)}>
         <p className="mb-4 text-slate-300">Envie o <b>backup</b> das entregas para o seu WhatsApp. Se o app falhar no meio do caminho, você continua com a lista completa: endereços, valores, telefones e localizações.</p>
+        <button onClick={() => { setPanel(null); setAfterOpt(true); setPlan({ kind: 'optimize' }) }} className="mb-2 w-full rounded-xl bg-slate-800 py-4 text-lg font-bold">🧭 Organizar a melhor ordem primeiro</button>
         <button onClick={sendBackup} className="mb-2 w-full rounded-xl bg-orange-500 py-4 text-lg font-bold text-slate-900">📤 Enviar backup agora</button>
         <button onClick={() => setPanel(null)} className="w-full rounded-xl bg-slate-800 py-3">Agora não</button></Sheet>}
     </div>
