@@ -9,7 +9,7 @@ export type StopRow = {
   pay_method: 'pix' | 'cash' | null; paid_amount: number | null; pay_differs: boolean
   delivered_at: string | null; received_by: string | null; notes: string | null
   deferred: boolean; retry_at: string | null; attempt_count: number
-  pin_url: string | null; client_notes: string | null
+  pin_url: string | null; client_notes: string | null; courier_pay: number
 }
 export type RouteRow = {
   id: string; owner_id: string; name: string | null; status: 'draft' | 'active' | 'finished' | 'cancelled'
@@ -109,6 +109,7 @@ export function summarize(stops: StopRow[]) {
     skipped: stops.filter(s => s.status === 'skipped').length, pending: stops.filter(s => s.status === 'pending').length,
     packages: sum(done, s => s.packages), planned: sum(stops, s => Number(s.price)),
     received: sum(done, s => Number(s.paid_amount ?? 0)), pix: paid('pix'), cash: paid('cash'),
+    courierPay: sum(done, s => Number(s.courier_pay ?? 0)), courierPlanned: sum(stops, s => Number(s.courier_pay ?? 0)),
     diffs: done.filter(s => s.pay_differs), retried: done.filter(s => s.attempt_count > 1),
   }
 }

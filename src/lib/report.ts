@@ -24,14 +24,14 @@ export function buildBackup(route: RouteRow, stops: StopRow[], owner: string) {
   const now = new Date().toISOString()
   const head = ['🏠 *RHD · BACKUP DA ROTA*', LINE, `📍 *${route.name ?? 'Rota'}*`, `👤 ${owner} · 📅 ${new Date().toLocaleDateString('pt-BR')} · 🕐 gerado às ${fmtTime(now)}`, '',
     `📦 *${pending.length} entrega${pending.length !== 1 ? 's' : ''} por fazer* · ${pending.reduce((a, s) => a + s.packages, 0)} pacote(s)`,
-    `💰 Previsto: *${brl(pending.reduce((a, s) => a + Number(s.price), 0))}*`, ...(done ? [`✅ Já feitas: ${done}`] : []), LINE]
+    `💰 Previsto: *${brl(pending.reduce((a, s) => a + Number(s.price), 0))}*`, `💼 Você recebe: *${brl(pending.reduce((a, s) => a + Number(s.courier_pay ?? 0), 0))}*`, ...(done ? [`✅ Já feitas: ${done}`] : []), LINE]
   let n = 0
   const body = groupByHood(pending).flatMap(([hood, list]) => [
     '', `📍 *${hood.toUpperCase()}* — ${list.length} entrega${list.length !== 1 ? 's' : ''} · ${brl(list.reduce((a, s) => a + Number(s.price), 0))}`, '',
     ...list.flatMap(s => {
       n += 1
       return [`*${n}. ${s.client_name}*${s.deferred ? ' ⏳ (voltar depois)' : ''}`, `📌 ${s.address || 'Sem endereço'}`,
-        `💰 ${brl(Number(s.price))} · 📦 ${s.packages} pacote${s.packages > 1 ? 's' : ''}`,
+        `💰 ${brl(Number(s.price))} · 💼 ${brl(Number(s.courier_pay ?? 0))} · 📦 ${s.packages} pacote${s.packages > 1 ? 's' : ''}`,
         ...(s.phone ? [`📞 ${fmtPhone(s.phone)}`, `💬 ${whatsUrl(s.phone)}`] : []),
         `🗺 ${stopLink(s)}`, ...(s.client_notes ? [`📝 ${s.client_notes}`] : []), '─────────────', '']
     }),
@@ -46,7 +46,7 @@ export function buildReport(route: RouteRow, stops: StopRow[], owner: string) {
   const day = route.go_at ? dayLabel(dayKeyOf(route.go_at)) : ''
   const lines = ['🏠 *RHD · RELATÓRIO DA ROTA*', LINE, `📍 *${route.name ?? 'Rota'}*`, `👤 ${owner}`, `📅 ${day}`, `⏱ ${fmtTime(route.go_at)} → ${fmtTime(route.finished_at)} · *${dur}*`, '',
     '📊 *RESUMO*', `✅ Entregues: *${m.delivered}* de ${m.total}`, `❌ Não entregues: *${m.failed + m.skipped}*`, `🔁 Entregues após voltar: *${m.retried.length}*`, `📦 Pacotes entregues: *${m.packages}*`, '',
-    '💰 *FINANCEIRO*', `Previsto: ${brl(m.planned)}`, `Recebido: *${brl(m.received)}*`, `   💠 Pix: ${brl(m.pix)}`, `   💵 Dinheiro: ${brl(m.cash)}`]
+    '💰 *FINANCEIRO*', `Previsto: ${brl(m.planned)}`, `Recebido: *${brl(m.received)}*`, `   💠 Pix: ${brl(m.pix)}`, `   💵 Dinheiro: ${brl(m.cash)}`, `💼 Entregador recebe: *${brl(m.courierPay)}*`, `🏢 Empresa: *${brl(m.received - m.courierPay)}*`]
   if (m.diffs.length) lines.push('', `⚠️ *PAGAMENTO DIFERENTE* (${m.diffs.length})`, ...m.diffs.map(s => `   • ${s.client_name}: ${brl(Number(s.price))} → *${brl(Number(s.paid_amount ?? 0))}*`))
   if (lost.length) lines.push('', `❌ *NÃO ENTREGUES* (${lost.length})`, ...lost.map(s => `   • ${s.client_name} — ${s.status === 'skipped' ? 'não realizada' : s.notes || 'sem motivo'}`))
   lines.push('', LINE, '📍 *ENTREGAS POR BAIRRO*')

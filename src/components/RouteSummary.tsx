@@ -24,7 +24,7 @@ export default function RouteSummary({ route, stops, owner, onClose }: { route: 
           <p className="text-sm font-medium">⏱ {fmtTime(route.go_at)} → {fmtTime(route.finished_at)} · <b>{dur}</b></p>
         </div>
         <div className="mb-4 grid grid-cols-2 gap-2">{big('✅ Entregues', `${m.delivered} de ${m.total}`)}{big('❌ Não entregues', String(m.failed + m.skipped))}{big('📦 Pacotes', String(m.packages))}{big('🔁 Após voltar', String(m.retried.length))}</div>
-        <div className={card}><p className={`${h} text-emerald-300`}>💰 Financeiro</p>{row('Previsto', brl(m.planned))}{row('Recebido', brl(m.received), true)}{row('💠 Pix', brl(m.pix))}{row('💵 Dinheiro', brl(m.cash))}</div>
+        <div className={card}><p className={`${h} text-emerald-300`}>💰 Financeiro</p>{row('Previsto', brl(m.planned))}{row('Recebido', brl(m.received), true)}{row('💠 Pix', brl(m.pix))}{row('💵 Dinheiro', brl(m.cash))}{row('💼 Entregador recebe', brl(m.courierPay), true)}{row('🏢 Empresa', brl(m.received - m.courierPay))}</div>
         {m.diffs.length > 0 && <div className={card}><p className={`${h} text-amber-300`}>⚠️ Pagamento diferente ({m.diffs.length})</p>{m.diffs.map(s => row(s.client_name, `${brl(Number(s.price))} → ${brl(Number(s.paid_amount ?? 0))}`))}</div>}
         {lost.length > 0 && <div className={card}><p className={`${h} text-red-300`}>❌ Não entregues ({lost.length})</p>{lost.map(s => <div key={s.id} className="py-1 text-sm"><b>{s.client_name}</b><span className="text-slate-400"> — {s.status === 'skipped' ? 'não realizada' : s.notes}</span></div>)}</div>}
         <p className={`${h} mt-6 text-orange-300`}>📍 Entregas por bairro</p>
