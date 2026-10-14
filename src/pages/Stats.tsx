@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRouteData } from '../lib/data'
-import { aggregate, byDay, inRange, top, type Range } from '../lib/stats'
-import { brl, fmtMin, pct } from '../lib/format'
+import { aggregate, byDay, inRange, pendingPayout, top, type Range } from '../lib/stats'
+import { brl, dayKeyOf, fmtMin, pct } from '../lib/format'
 import Period from '../components/Period'
 import { Bars } from '../components/Bars'
 
@@ -14,12 +14,16 @@ export default function Stats() {
   const [range, setRange] = useState<Range>({ from: '', to: '' })
   const [names, setNames] = useState<Record<string, string>>({})
   const [clients, setClients] = useState(0)
+  const [payouts, setPayouts] = useState<{ amount: number; paid_at: string }[]>([])
   useEffect(() => {
     supabase.from('profiles').select('id, full_name, username').then(({ data }) => setNames(Object.fromEntries((data ?? []).map(p => [p.id, (p.full_name || p.username).split(' ')[0]]))))
+    supabase.from('payouts').select('amount, paid_at').then(({ data }) => setPayouts((data ?? []).map(x => ({ amount: Number(x.amount), paid_at: x.paid_at as string }))))
     supabase.from('clients').select('id', { count: 'exact', head: true }).then(({ count }) => setClients(count ?? 0))
   }, [])
   const rs = useMemo(() => routes.filter(r => r.status !== 'draft' && inRange(r, range)), [routes, range])
   const a = useMemo(() => aggregate(rs, by), [rs, by])
+  const pend = useMemo(() => pendingPayout(routes, by), [routes, by])
+  const paid = payouts.filter(x => { const d = dayKeyOf(x.paid_at); return (!range.from || d >= range.from) && (!range.to || d <= range.to) }).reduce((t, x) => t + x.amount, 0)
   const days = useMemo(() => byDay(rs, by).slice(-14), [rs, by])
   const ranking = useMemo(() => [...new Set(rs.map(r => r.owner_id))].map(id => { const x = aggregate(rs.filter(r => r.owner_id === id), by); return { name: names[id] ?? 'Entregador', n: x.delivered, sub: brl(x.received) } }).sort((p, q) => q.n - p.n), [rs, by, names])
   const kpi = (l: string, v: string, s?: string) => <div className="rounded-2xl bg-slate-800 p-3"><p className="text-xs text-slate-400">{l}</p><p className="text-xl font-extrabold">{v}</p>{s && <p className="text-xs text-slate-500">{s}</p>}</div>
@@ -35,6 +39,7 @@ export default function Stats() {
           <div className="flex justify-between py-1"><span className="text-slate-300">🤝 Repasse aos entregadores</span><b className="text-lg">{brl(a.courierPay)}</b></div>
           <div className="mt-1 flex justify-between border-t border-slate-600 pt-2"><span className="text-slate-300">🏢 Fica com a empresa</span><b className="text-xl text-emerald-400">{brl(a.received - a.courierPay)}</b></div>
           <p className="mt-2 text-xs text-slate-500">Pix {brl(a.pix)} · Dinheiro {brl(a.cash)}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-center"><div className="rounded-xl bg-slate-900/60 p-3"><p className="text-xs text-slate-400">⏳ A pagar (todas as rotas)</p><p className="font-extrabold text-amber-300">{brl(pend.amount)}</p></div><div className="rounded-xl bg-slate-900/60 p-3"><p className="text-xs text-slate-400">✅ Repassado no período</p><p className="font-extrabold">{brl(paid)}</p></div></div>
         </div>
         <div className="mb-4 grid grid-cols-2 gap-2">
           {kpi('✅ Entregas feitas', String(a.delivered), `${a.finished} rota(s) finalizada(s)`)}{kpi('❌ Não entregues', String(a.failed + a.skipped), `sucesso ${pct(a.success)}`)}

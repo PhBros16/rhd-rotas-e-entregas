@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRouteData } from '../lib/data'
-import { aggregate, inRange, ranges, type Range } from '../lib/stats'
+import { aggregate, inRange, pendingPayout, ranges, type Range } from '../lib/stats'
 import { brl, norm } from '../lib/format'
 import Period from '../components/Period'
 import AdminTools from '../components/AdminTools'
@@ -25,7 +25,7 @@ export default function Couriers() {
   }, [load])
 
   const rows = useMemo(() => people.filter(p => (!status || p.status === status) && (!q || norm(`${p.full_name} ${p.username}`).includes(norm(q)))).map(p => ({
-    p, a: aggregate(routes.filter(r => r.owner_id === p.id && r.status !== 'draft' && inRange(r, range)), by),
+    p, a: aggregate(routes.filter(r => r.owner_id === p.id && r.status !== 'draft' && inRange(r, range)), by), due: pendingPayout(routes.filter(r => r.owner_id === p.id), by).amount,
   })).sort((x, y) => y.a.delivered - x.a.delivered || (x.p.full_name || '').localeCompare(y.p.full_name || '')), [people, routes, by, range, q, status])
 
   const cur = sel ? people.find(x => x.id === sel) : null
@@ -40,10 +40,10 @@ export default function Couriers() {
       <Period value={range} onChange={setRange} />
       {ready && rows.length === 0 && <p className="mt-6 text-center text-slate-400">Nenhum entregador encontrado.</p>}
       <ul className="mb-6 flex flex-col gap-3">
-        {rows.map(({ p, a }) => (
+        {rows.map(({ p, a, due }) => (
           <li key={p.id}><button onClick={() => setSel(p.id)} className="w-full rounded-2xl bg-slate-800 p-4 text-left active:scale-[0.99]">
             <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="font-bold">{p.full_name || p.username}</p><p className="text-sm text-slate-400">@{p.username}{p.role === 'admin' ? ' · admin' : ''} · {p.pay_rate != null ? `${brl(p.pay_rate)}/entrega` : 'valor padrão'}</p></div><span className="text-slate-500">›</span></div>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center"><div><p className="text-lg font-extrabold">{a.delivered}</p><p className="text-xs text-slate-400">entregas</p></div><div><p className="text-lg font-extrabold">{a.finished}</p><p className="text-xs text-slate-400">rotas</p></div><div><p className="text-lg font-extrabold text-emerald-400">{brl(a.courierPay)}</p><p className="text-xs text-slate-400">repassar</p></div></div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center"><div><p className="text-lg font-extrabold">{a.delivered}</p><p className="text-xs text-slate-400">entregas</p></div><div><p className="text-lg font-extrabold">{a.finished}</p><p className="text-xs text-slate-400">rotas</p></div><div><p className={`text-lg font-extrabold ${due > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>{brl(due)}</p><p className="text-xs text-slate-400">a pagar</p></div></div>
           </button></li>
         ))}
       </ul>
