@@ -1,62 +1,53 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useRouteData } from '../lib/data'
-import { aggregate, inRange, top, type Range } from '../lib/stats'
-import { brl, fmtDate, fmtMin, pct } from '../lib/format'
+import { aggregate, inRange, ranges, type Range } from '../lib/stats'
+import { brl, norm } from '../lib/format'
 import Period from '../components/Period'
 import AdminTools from '../components/AdminTools'
-
-type P = { id: string; full_name: string; username: string; role: string; status: string }
+import CourierProfile, { type P } from './CourierProfile'
 
 export default function Couriers() {
   const { routes, by, ready } = useRouteData()
-  const [range, setRange] = useState<Range>({ from: '', to: '' })
+  const [range, setRange] = useState<Range>(ranges().week)
   const [people, setPeople] = useState<P[]>([])
   const [owned, setOwned] = useState<Record<string, number>>({})
-  const [open, setOpen] = useState<string | null>(null)
-  useEffect(() => {
-    supabase.from('profiles').select('id, full_name, username, role, status').then(({ data }) => setPeople((data ?? []) as P[]))
-    supabase.from('clients').select('owner_id').then(({ data }) => { const m: Record<string, number> = {}; for (const c of data ?? []) m[c.owner_id] = (m[c.owner_id] ?? 0) + 1; setOwned(m) })
+  const [q, setQ] = useState('')
+  const [status, setStatus] = useState('active')
+  const [sel, setSel] = useState<string | null>(null)
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('profiles').select('id, full_name, username, role, status, pay_rate, created_at')
+    setPeople((data ?? []) as P[])
   }, [])
-  const rows = useMemo(() => people.filter(p => p.status === 'active').map(p => {
-    const mine = routes.filter(r => r.owner_id === p.id && r.status !== 'draft')
-    const inP = mine.filter(r => inRange(r, range))
-    return { p, a: aggregate(inP, by), all: mine, inP }
-  }).sort((x, y) => y.a.received - x.a.received), [people, routes, by, range])
-  const kv = (l: string, v: string) => <div className="rounded-xl bg-slate-900/60 p-3"><p className="text-xs text-slate-400">{l}</p><p className="font-bold">{v}</p></div>
+  useEffect(() => {
+    void load()
+    supabase.from('clients').select('owner_id').then(({ data }) => { const m: Record<string, number> = {}; for (const c of data ?? []) m[c.owner_id] = (m[c.owner_id] ?? 0) + 1; setOwned(m) })
+  }, [load])
+
+  const rows = useMemo(() => people.filter(p => (!status || p.status === status) && (!q || norm(`${p.full_name} ${p.username}`).includes(norm(q)))).map(p => ({
+    p, a: aggregate(routes.filter(r => r.owner_id === p.id && r.status !== 'draft' && inRange(r, range)), by),
+  })).sort((x, y) => y.a.delivered - x.a.delivered || (x.p.full_name || '').localeCompare(y.p.full_name || '')), [people, routes, by, range, q, status])
+
+  const cur = sel ? people.find(x => x.id === sel) : null
+  if (cur) return <CourierProfile p={cur} routes={routes} by={by} clients={owned[cur.id] ?? 0} onBack={() => setSel(null)} onChanged={load} />
   return (
     <main className="mx-auto max-w-lg p-4 pb-10">
-      <header className="mb-3 flex items-center gap-3"><img src="/favicon.svg" alt="" className="h-10 w-10" /><div><h1 className="font-bold">Entregadores</h1><p className="text-sm text-slate-400">{rows.length} ativo(s)</p></div></header>
-      <AdminTools />
+      <header className="mb-3 flex items-center gap-3"><img src="/favicon.svg" alt="" className="h-10 w-10" /><div><h1 className="font-bold">Entregadores</h1><p className="text-sm text-slate-400">Toque em um nome para ver o perfil</p></div></header>
+      <div className="mb-3 flex gap-2">
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar entregador" className="min-w-0 flex-1 rounded-xl bg-slate-800 px-4 py-3 outline-none focus:ring-2 focus:ring-orange-500" />
+        <select value={status} onChange={e => setStatus(e.target.value)} className="rounded-xl bg-slate-800 px-3 text-sm"><option value="active">Ativos</option><option value="pending">Aguardando</option><option value="blocked">Bloqueados</option><option value="">Todos</option></select>
+      </div>
       <Period value={range} onChange={setRange} />
-      {ready && rows.length === 0 && <p className="mt-10 text-center text-slate-400">Nenhum entregador ativo.</p>}
-      <ul className="flex flex-col gap-3">
-        {rows.map(({ p, a, all, inP }) => (
-          <li key={p.id} className="rounded-2xl bg-slate-800">
-            <button onClick={() => setOpen(open === p.id ? null : p.id)} className="flex w-full items-start justify-between gap-2 p-4 text-left">
-              <div className="min-w-0"><p className="font-bold">{p.full_name || p.username} {p.role === 'admin' && <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs font-normal text-slate-300">admin</span>}</p>
-                <p className="text-sm text-slate-400">{a.delivered} entrega(s) · {a.finished} rota(s) · repasse {brl(a.courierPay)}</p></div>
-              <span className="text-slate-500">{open === p.id ? '▴' : '▾'}</span>
-            </button>
-            {open === p.id && (
-              <div className="border-t border-slate-700 p-4 pt-3">
-                <div className="mb-3 grid grid-cols-2 gap-2">
-                  {kv('✅ Entregas', String(a.delivered))}{kv('❌ Não entregues', String(a.failed + a.skipped))}
-                  {kv('📦 Pacotes', String(a.packages))}{kv('🎯 Sucesso', pct(a.success))}
-                  {kv('💰 Arrecadou', brl(a.received))}{kv('🤝 Repasse devido', brl(a.courierPay))}{kv('💠 Pix · 💵 Din.', `${brl(a.pix)} · ${brl(a.cash)}`)}
-                  {kv('⏱ Tempo/entrega', fmtMin(a.avgPerDeliveryMin))}{kv('🕐 Rota média', fmtMin(a.avgRouteMin))}
-                  {kv('🎟 Ticket médio', brl(a.avgTicket))}{kv('👥 Clientes', String(owned[p.id] ?? 0))}
-                </div>
-                {top(a.stops, s => s.neighborhood || 'Sem bairro', 4).length > 0 && <p className="mb-3 text-sm text-slate-300"><b>📍 Bairros:</b> {top(a.stops, s => s.neighborhood || 'Sem bairro', 4).map(t => `${t.name} (${t.n})`).join(' · ')}</p>}
-                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-400">Últimas rotas</p>
-                <ul className="flex flex-col gap-1 text-sm">{[...(inP.length ? inP : all)].sort((x, y) => (y.go_at ?? y.created_at).localeCompare(x.go_at ?? x.created_at)).slice(0, 5).map(r => {
-                  const m = aggregate([r], by); return <li key={r.id} className="flex justify-between gap-2"><span className="truncate">{fmtDate(r.go_at ?? r.created_at)} · {r.name}</span><span className="shrink-0 text-slate-400">{m.delivered}/{m.total} · {brl(m.received)}</span></li> })}
-                  {all.length === 0 && <li className="text-slate-500">Nenhuma rota ainda.</li>}</ul>
-              </div>
-            )}
-          </li>
+      {ready && rows.length === 0 && <p className="mt-6 text-center text-slate-400">Nenhum entregador encontrado.</p>}
+      <ul className="mb-6 flex flex-col gap-3">
+        {rows.map(({ p, a }) => (
+          <li key={p.id}><button onClick={() => setSel(p.id)} className="w-full rounded-2xl bg-slate-800 p-4 text-left active:scale-[0.99]">
+            <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="font-bold">{p.full_name || p.username}</p><p className="text-sm text-slate-400">@{p.username}{p.role === 'admin' ? ' · admin' : ''} · {p.pay_rate != null ? `${brl(p.pay_rate)}/entrega` : 'valor padrão'}</p></div><span className="text-slate-500">›</span></div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center"><div><p className="text-lg font-extrabold">{a.delivered}</p><p className="text-xs text-slate-400">entregas</p></div><div><p className="text-lg font-extrabold">{a.finished}</p><p className="text-xs text-slate-400">rotas</p></div><div><p className="text-lg font-extrabold text-emerald-400">{brl(a.courierPay)}</p><p className="text-xs text-slate-400">repassar</p></div></div>
+          </button></li>
         ))}
       </ul>
+      <details className="rounded-2xl bg-slate-800/50 p-3"><summary className="cursor-pointer text-sm font-semibold text-slate-300">⚙️ Ajustes e ferramentas</summary><div className="mt-3"><AdminTools /></div></details>
     </main>
   )
 }
