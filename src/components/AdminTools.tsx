@@ -35,7 +35,7 @@ function GeoCard() {
     setBusy(true); setMsg('')
     const r = await geocodeClients(ids, (d, t) => setProg(`${d}/${t}`))
     setBusy(false); setProg('')
-    setMsg(`Localizados: ${r.ok} · não localizados: ${r.failed}${r.limited ? ' · o serviço pediu para esperar; tente de novo em alguns minutos' : ''}`)
+    setMsg(`Localizados: ${r.ok} · não encontrados: ${r.failed}${r.blocked ? ` · ${r.blocked} não consultados (os serviços recusaram; tente de novo mais tarde)` : ''}${r.info ? ` — ${r.info}` : ''}`)
     await load()
   }
   const stat = (l: string, v: number, c: string) => <div className="rounded-xl bg-slate-900/60 p-3"><p className="text-xs text-slate-400">{l}</p><p className={`text-xl font-extrabold ${c}`}>{v}</p></div>
