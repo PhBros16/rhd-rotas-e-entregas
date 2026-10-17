@@ -13,7 +13,7 @@ export function getPosition(): Promise<Pt | null> {
 const like = (s: StopRow): Stoplike => ({ id: s.id, lat: s.lat, lng: s.lng, hood: s.neighborhood })
 const queueOf = (stops: StopRow[]) => stops.filter(s => s.status === 'pending' && !s.deferred).sort((a, b) => a.position - b.position)
 function lastKnown(stops: StopRow[]): Pt | null {
-  const d = stops.filter(s => s.status === 'delivered' && s.lat != null && s.lng != null).sort((a, b) => (b.delivered_at ?? '').localeCompare(a.delivered_at ?? ''))[0]
+  const d = stops.filter(s => s.status === 'delivered' && has(like(s))).sort((a, b) => (b.delivered_at ?? '').localeCompare(a.delivered_at ?? ''))[0]
   return d ? { lat: d.lat!, lng: d.lng! } : null
 }
 function usePosition(stops: StopRow[]) {
@@ -42,7 +42,7 @@ export function InsertSheet({ stop, stops, onClose, onDone }: { stop: StopRow; s
   const byId = useMemo(() => new Map(stops.map(s => [s.id, s])), [stops])
   const name = (id: string | null, fallback: string) => (id ? byId.get(id)?.client_name ?? fallback : fallback)
   const items: Item[] = useMemo(() => queue.filter(s => has(like(s))).map(s => ({ id: s.id, lat: s.lat!, lng: s.lng!, hood: s.neighborhood })), [queue])
-  const x: Item | null = stop.lat != null && stop.lng != null ? { id: stop.id, lat: stop.lat, lng: stop.lng, hood: stop.neighborhood } : null
+  const x: Item | null = has(like(stop)) ? { id: stop.id, lat: stop.lat!, lng: stop.lng!, hood: stop.neighborhood } : null
   const smart = !!x && !!from && items.length > 0
   const best = smart ? bestInsertion(from, items, x!) : null
   const now = smart ? insertionAt(from, items, x!, 0) : null

@@ -18,7 +18,9 @@ export const roadKm = (a: Pt, b: Pt) => haversineKm(a, b) * ROAD_FACTOR
 export const travelMin = (km: number) => (km / SPEED_KMH) * 60
 const hoodOf = (p: Pt | Item) => (p as Item).hood ?? null
 const cost = (a: Pt | Item, b: Item) => { const h = hoodOf(a); return roadKm(a, b) + (h && b.hood && h !== b.hood ? HOOD_PENALTY_KM : 0) }
-export const has = (s: Stoplike): s is Stoplike & Pt => s.lat != null && s.lng != null
+/** Coordenadas fora da região de atuação (Pernambuco litoral e mata) são tratadas como ausentes, para um dado errado não bagunçar a rota. */
+export const inRegion = (lat: number, lng: number) => lat >= -9.5 && lat <= -7.0 && lng >= -36.5 && lng <= -34.5
+export const has = (s: Stoplike): s is Stoplike & Pt => s.lat != null && s.lng != null && inRegion(s.lat, s.lng)
 
 function nearest(start: Pt | null, items: Item[]): Item[] {
   const left = [...items], out: Item[] = []
