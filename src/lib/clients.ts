@@ -34,3 +34,35 @@ export async function lookupCep(cep: string) {
   if (j.erro) return null
   return { street: j.logradouro as string, neighborhood: j.bairro as string, city: j.localidade as string }
 }
+
+/* ---------- padronização de nomes de cidade e bairro ---------- */
+const CONNECTORS = new Set(['de', 'da', 'do', 'das', 'dos', 'e'])
+/** "ponte DOS carvalhos" -> "Ponte dos Carvalhos" */
+export const tidyName = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase().split(' ')
+  .map((w, i) => (i > 0 && CONNECTORS.has(w) ? w : w.replace(/^(\P{L}*)(\p{L})/u, (_m, a: string, b: string) => a + b.toUpperCase()))).join(' ')
+
+export function lev(a: string, b: string): number {
+  const prev = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    let last = prev[0]; prev[0] = i
+    for (let j = 1; j <= b.length; j++) { const t = prev[j]; prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, last + (a[i - 1] === b[j - 1] ? 0 : 1)); last = t }
+  }
+  return prev[b.length]
+}
+const flat = (s: string) => norm(s).replace(/\s+/g, ' ').trim()
+/** Se o que foi digitado parece um bairro que já existe (erro de digitação, maiúsculas, acento), devolve o já existente. */
+export function suggestHood(value: string, existing: string[]): string | null {
+  const v = flat(value)
+  if (!v) return null
+  let best: string | null = null, bd = Infinity
+  const limit = Math.max(1, Math.min(2, Math.floor(v.length / 5)))
+  for (const e of existing) {
+    const x = flat(e)
+    if (x === v) return e === value.trim() ? null : e
+    const d = lev(v, x)
+    if (d <= limit && d < bd) { bd = d; best = e }
+  }
+  return best
+}
+/** Usa a grafia já cadastrada, se existir; senão arruma maiúsculas. */
+export const canon = (value: string, list: string[]) => list.find(e => flat(e) === flat(value)) ?? tidyName(value)
