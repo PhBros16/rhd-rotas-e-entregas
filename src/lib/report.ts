@@ -3,7 +3,8 @@ import { summarize } from './routes'
 import { brl, dayLabel, dayKeyOf, fmtDur, fmtTime } from './format'
 import { fmtPhone, mapsUrl, whatsUrl } from './maplink'
 
-export const stopDest = (s: StopRow) => (s.lat != null && s.lng != null ? { lat: s.lat, lng: s.lng } : [s.address, s.neighborhood, s.city, 'PE'].filter(Boolean).join(', '))
+// Navegação sempre pelo endereço escrito: o Maps e o Waze acertam o número da casa; as coordenadas guardadas só servem para ordenar a rota.
+export const stopDest = (s: StopRow) => [s.address, s.neighborhood, s.city, 'PE'].filter(Boolean).join(', ')
 export const stopLink = (s: StopRow) => (s.pin_url?.startsWith('http') ? s.pin_url : mapsUrl(stopDest(s)))
 
 /** Agrupa por bairro, mantendo a ordem em que cada bairro aparece primeiro na rota. */

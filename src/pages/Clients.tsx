@@ -80,8 +80,7 @@ function ClientForm({ initial, restored, all, onClose, onSaved }: { initial: Cli
 
 function Card({ c, open, owner, selecting, selected, onToggle, onEdit, onDelete }: { c: Client; open: boolean; owner?: string; selecting?: boolean; selected?: boolean; onToggle: () => void; onEdit: () => void; onDelete: () => void }) {
   const full = [c.street, c.number, c.neighborhood, c.city, 'PE'].filter(Boolean).join(', ')
-  const pos = c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : null
-  const dest = pos ?? full
+  const dest = full // navegação pelo endereço escrito (o Maps e o Waze acertam o número da casa)
   if (selecting) return (
     <li><button onClick={onToggle} className={`flex w-full items-center gap-3 rounded-2xl p-4 text-left ${selected ? 'bg-orange-500/20 ring-2 ring-orange-500' : 'bg-slate-800'}`}>
       <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 font-bold ${selected ? 'border-orange-500 bg-orange-500 text-slate-900' : 'border-slate-500'}`}>{selected ? '✓' : ''}</span>
