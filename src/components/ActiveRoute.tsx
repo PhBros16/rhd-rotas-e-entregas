@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { localDb } from '../lib/clients'
 import { doNow, finishRoute, refresh, summarize, undo, type StopRow } from '../lib/routes'
-import { fmtPhone, mapsUrl, wazeUrl, whatsUrl } from '../lib/maplink'
+import { fmtCep, fmtPhone, mapsUrl, wazeUrl, whatsUrl } from '../lib/maplink'
 import { brl, fmtDur, fmtTime } from '../lib/format'
 import { buildBackup, shareText, stopDest } from '../lib/report'
 import RouteSummary from './RouteSummary'
@@ -38,6 +38,8 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
   const route = useLiveQuery(() => localDb.routes.get(routeId), [routeId])
   const stops = useLiveQuery(() => localDb.stops.where('route_id').equals(routeId).toArray(), [routeId]) ?? []
   const waiting = useLiveQuery(() => localDb.outbox.count(), []) ?? 0
+  const clients = useLiveQuery(() => localDb.clients.toArray(), []) ?? []
+  const clientOf = (s: StopRow) => clients.find(c => c.id === s.client_id)
   const [t, setT] = useState(Date.now())
   const [sheet, setSheet] = useState<{ kind: 'deliver' | 'defer' | 'fail'; s: StopRow } | null>(null)
   const [panel, setPanel] = useState<null | 'nav' | 'menu' | 'backup' | 'all'>(askBackup ? 'backup' : null)
@@ -90,7 +92,7 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
     if (window.confirm(msg)) { setPanel(null); await finishRoute(route!, stops) }
   }
   async function sendBackup() {
-    const r = await shareText(buildBackup(route!, stops, owner))
+    const r = await shareText(buildBackup(route!, stops, owner, clientOf))
     setNote(r === 'copied' ? 'Backup copiado. Cole no WhatsApp.' : r === 'cancelled' ? '' : 'Backup pronto para enviar.')
     setPanel(null)
   }
@@ -114,7 +116,7 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
             <p className="text-xs font-bold uppercase tracking-widest text-orange-400">Parada {finished + 1} de {stops.length}</p>
             <h2 className="mt-1 text-3xl font-extrabold leading-tight">{next.client_name}</h2>
             <p className="mt-2 text-xl text-slate-200">{next.address || 'Sem endereço'}</p>
-            <p className="text-slate-400">{[next.neighborhood, next.city].filter(Boolean).join(' · ')}</p>
+            <p className="text-slate-400">{[next.neighborhood, next.city].filter(Boolean).join(' · ')}{clientOf(next)?.cep ? ` · CEP ${fmtCep(clientOf(next)!.cep)}` : ''}</p>
             <div className="mt-3 flex flex-wrap gap-2 text-sm font-semibold">
               <span className="rounded-full bg-orange-500/20 px-3 py-1 text-orange-300">{brl(Number(next.price))}</span>
               <span className="rounded-full bg-slate-800 px-3 py-1">📦 {next.packages} pacote{next.packages > 1 ? 's' : ''}</span>
@@ -163,8 +165,8 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
       {sheet?.kind === 'defer' && <DeferSheet s={sheet.s} onClose={() => setSheet(null)} />}
       {sheet?.kind === 'fail' && <FailSheet s={sheet.s} onClose={() => setSheet(null)} />}
       {panel === 'nav' && next && <Sheet title="Abrir no mapa" onClose={() => setPanel(null)}><div className="flex flex-col gap-2">
-        <a onClick={() => setPanel(null)} href={mapsUrl(stopDest(next))} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-800 py-4 text-center text-lg font-bold">Google Maps</a>
-        <a onClick={() => setPanel(null)} href={wazeUrl(stopDest(next))} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-800 py-4 text-center text-lg font-bold">Waze</a></div></Sheet>}
+        <a onClick={() => setPanel(null)} href={mapsUrl(stopDest(next, clientOf(next)))} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-800 py-4 text-center text-lg font-bold">Google Maps</a>
+        <a onClick={() => setPanel(null)} href={wazeUrl(stopDest(next, clientOf(next)))} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-800 py-4 text-center text-lg font-bold">Waze</a></div></Sheet>}
       {panel === 'menu' && <Sheet title="Menu da rota" onClose={() => setPanel(null)}><div className="flex flex-col gap-2">
         <button onClick={() => { setPanel(null); setAfterOpt(false); setPlan({ kind: 'optimize' }) }} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">🧭 Organizar a melhor ordem</button>
         <button onClick={() => setPanel('all')} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">📋 Ver rota completa</button>

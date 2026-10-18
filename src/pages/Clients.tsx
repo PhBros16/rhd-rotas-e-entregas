@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth'
-import { CITIES, canon, digits, emptyDraft, localDb, lookupCep, norm, suggestHood, type Client, type ClientDraft } from '../lib/clients'
+import { CITIES, canon, navQuery, digits, emptyDraft, localDb, lookupCep, norm, suggestHood, type Client, type ClientDraft } from '../lib/clients'
 import { fmtCep, fmtPhone, mapsUrl, wazeUrl, whatsUrl } from '../lib/maplink'
 import { afterClientSave, geocodeClients } from '../lib/geo'
 import RouteBuilder from '../components/RouteBuilder'
@@ -79,7 +79,7 @@ function ClientForm({ initial, restored, all, onClose, onSaved }: { initial: Cli
 }
 
 function Card({ c, open, owner, selecting, selected, onToggle, onEdit, onDelete }: { c: Client; open: boolean; owner?: string; selecting?: boolean; selected?: boolean; onToggle: () => void; onEdit: () => void; onDelete: () => void }) {
-  const full = [c.street, c.number, c.neighborhood, c.city, 'PE'].filter(Boolean).join(', ')
+  const full = navQuery(c)
   const dest = full // navegação pelo endereço escrito (o Maps e o Waze acertam o número da casa)
   if (selecting) return (
     <li><button onClick={onToggle} className={`flex w-full items-center gap-3 rounded-2xl p-4 text-left ${selected ? 'bg-orange-500/20 ring-2 ring-orange-500' : 'bg-slate-800'}`}>
