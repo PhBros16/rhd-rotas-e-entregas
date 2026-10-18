@@ -1,11 +1,13 @@
 import type { RouteRow, StopRow } from './routes'
 import { summarize } from './routes'
 import { brl, dayLabel, dayKeyOf, fmtDur, fmtTime } from './format'
-import { fmtPhone, mapsUrl, whatsUrl } from './maplink'
+import { fmtCep, fmtPhone, mapsUrl, whatsUrl } from './maplink'
+import { navQuery, type Client } from './clients'
 
-// Navegação sempre pelo endereço escrito: o Maps e o Waze acertam o número da casa; as coordenadas guardadas só servem para ordenar a rota.
-export const stopDest = (s: StopRow) => [s.address, s.neighborhood, s.city, 'PE'].filter(Boolean).join(', ')
-export const stopLink = (s: StopRow) => (s.pin_url?.startsWith('http') ? s.pin_url : mapsUrl(stopDest(s)))
+// Navegação sempre pelo endereço escrito (com CEP quando o cadastro do cliente está disponível): o Maps e o Waze acertam o número da casa;
+// as coordenadas guardadas só servem para ordenar a rota.
+export const stopDest = (s: StopRow, c?: Client) => (c ? navQuery(c) : [s.address, s.neighborhood, s.city, 'PE'].filter(Boolean).join(', '))
+export const stopLink = (s: StopRow, c?: Client) => (s.pin_url?.startsWith('http') ? s.pin_url : mapsUrl(stopDest(s, c)))
 
 /** Agrupa por bairro, mantendo a ordem em que cada bairro aparece primeiro na rota. */
 export function groupByHood(stops: StopRow[]) {
@@ -19,25 +21,33 @@ export function groupByHood(stops: StopRow[]) {
 
 const LINE = '━━━━━━━━━━━━━━━'
 
-export function buildBackup(route: RouteRow, stops: StopRow[], owner: string) {
-  const pending = stops.filter(s => s.status === 'pending')
+export function buildBackup(route: RouteRow, stops: StopRow[], owner: string, clientOf?: (s: StopRow) => Client | undefined) {
+  const pending = stops.filter(s => s.status === 'pending').sort((a, b) => a.position - b.position)
   const done = stops.length - pending.length
-  const now = new Date().toISOString()
-  const head = ['🏠 *RHD · BACKUP DA ROTA*', LINE, `📍 *${route.name ?? 'Rota'}*`, `👤 ${owner} · 📅 ${new Date().toLocaleDateString('pt-BR')} · 🕐 gerado às ${fmtTime(now)}`, '',
-    `📦 *${pending.length} entrega${pending.length !== 1 ? 's' : ''} por fazer* · ${pending.reduce((a, s) => a + s.packages, 0)} pacote(s)`,
-    `💰 Previsto: *${brl(pending.reduce((a, s) => a + Number(s.price), 0))}*`, `💼 Você recebe: *${brl(pending.reduce((a, s) => a + Number(s.courier_pay ?? 0), 0))}*`, ...(done ? [`✅ Já feitas: ${done}`] : []), LINE]
-  let n = 0
-  const body = groupByHood(pending).flatMap(([hood, list]) => [
-    '', `📍 *${hood.toUpperCase()}* — ${list.length} entrega${list.length !== 1 ? 's' : ''} · ${brl(list.reduce((a, s) => a + Number(s.price), 0))}`, '',
-    ...list.flatMap(s => {
-      n += 1
-      return [`*${n}. ${s.client_name}*${s.deferred ? ' ⏳ (voltar depois)' : ''}`, `📌 ${s.address || 'Sem endereço'}`,
-        `💰 ${brl(Number(s.price))} · 💼 ${brl(Number(s.courier_pay ?? 0))} · 📦 ${s.packages} pacote${s.packages > 1 ? 's' : ''}`,
-        ...(s.phone ? [`📞 ${fmtPhone(s.phone)}`, `💬 ${whatsUrl(s.phone)}`] : []),
-        `🗺 ${stopLink(s)}`, ...(s.client_notes ? [`📝 ${s.client_notes}`] : []), '─────────────', '']
-    }),
-  ])
-  return [...head, ...body, '_Backup gerado pelo app RHD. Em caso de falha, use esta lista._'].join('\n')
+  const sum = (l: StopRow[], f: (s: StopRow) => number) => l.reduce((t, s) => t + f(s), 0)
+  const hoodKey = (s: StopRow) => `${s.neighborhood || 'Sem bairro'}${s.city ? ` · ${s.city}` : ''}`
+  const hoods = groupByHood(pending).map(([k, l]) => `${k.split(' · ')[0]} (${l.length})`).join(' · ')
+  const head = ['🏠 *RHD · BACKUP DA ROTA*', LINE, `📍 *${route.name ?? 'Rota'}*`,
+    `👤 ${owner} · 📅 ${new Date().toLocaleDateString('pt-BR')} · 🕐 gerado às ${fmtTime(new Date().toISOString())}`, '',
+    `📦 *${pending.length} entrega${pending.length !== 1 ? 's' : ''} por fazer* · ${sum(pending, s => s.packages)} pacote(s)`,
+    `💰 A receber dos clientes: *${brl(sum(pending, s => Number(s.price)))}*`, `💼 Você recebe: *${brl(sum(pending, s => Number(s.courier_pay ?? 0)))}*`,
+    ...(done ? [`✅ Já feitas: ${done}`] : []), ...(hoods ? [`🗂 Bairros: ${hoods}`] : []), LINE]
+  const body: string[] = []
+  for (let i = 0; i < pending.length;) {
+    const key = hoodKey(pending[i]); let j = i
+    while (j < pending.length && hoodKey(pending[j]) === key) j++
+    const run = pending.slice(i, j)
+    body.push('', `📍 *${key.toUpperCase()}* — ${run.length} entrega${run.length !== 1 ? 's' : ''} · ${brl(sum(run, s => Number(s.price)))}`, '')
+    run.forEach((s, k) => {
+      const c = clientOf?.(s)
+      body.push(`*${i + k + 1}. ${s.client_name}* — ${brl(Number(s.price))} · 📦 ${s.packages}${s.deferred ? ' ⏳ voltar depois' : ''}`,
+        `📌 ${s.address || 'Sem endereço'}${c?.cep ? ` · CEP ${fmtCep(c.cep)}` : ''}`,
+        ...(s.phone ? [`📞 ${fmtPhone(s.phone)}`, `💬 ${whatsUrl(s.phone).replace('https://', '')}`] : []),
+        `🗺 ${stopLink(s, c)}`, ...(s.client_notes ? [`📝 ${s.client_notes}`] : []), '─────────────', '')
+    })
+    i = j
+  }
+  return [...head, ...body, '_Se o app falhar, siga por esta lista na ordem: toque em 🗺 para navegar e em 💬 para falar com o cliente._'].join('\n')
 }
 
 export function buildReport(route: RouteRow, stops: StopRow[], owner: string) {

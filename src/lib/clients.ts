@@ -66,3 +66,9 @@ export function suggestHood(value: string, existing: string[]): string | null {
 }
 /** Usa a grafia já cadastrada, se existir; senão arruma maiúsculas. */
 export const canon = (value: string, list: string[]) => list.find(e => flat(e) === flat(value)) ?? tidyName(value)
+
+/** Texto enviado ao Maps e ao Waze: rua, número, bairro, cidade e CEP (sem complemento, que atrapalha a busca). */
+export const navQuery = (c: Pick<Client, 'street' | 'number' | 'neighborhood' | 'city' | 'cep'>) => [
+  [c.street, c.number].filter(Boolean).join(', '), c.neighborhood?.replace(/\s*\(.*?\)\s*/g, ' ').trim(), c.city ? `${c.city} - PE` : 'PE',
+  c.cep && c.cep.length === 8 ? `${c.cep.slice(0, 5)}-${c.cep.slice(5)}` : c.cep,
+].filter(Boolean).join(', ')
