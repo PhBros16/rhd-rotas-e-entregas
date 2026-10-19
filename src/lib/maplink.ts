@@ -9,3 +9,10 @@ export const fmtPhone = (p: string | null) => {
   return p ?? ''
 }
 export const fmtCep = (c: string | null) => (c && c.length === 8 ? `${c.slice(0, 5)}-${c.slice(5)}` : c ?? '')
+
+/** Rota com várias paradas no Google Maps (a última é o destino; as outras, paradas intermediárias). O Maps aceita poucas por vez. */
+export const mapsRouteUrl = (stops: string[]) => {
+  const p = new URLSearchParams({ api: '1', destination: stops[stops.length - 1], travelmode: 'driving' })
+  if (stops.length > 1) p.set('waypoints', stops.slice(0, -1).join('|'))
+  return `https://www.google.com/maps/dir/?${p}`
+}

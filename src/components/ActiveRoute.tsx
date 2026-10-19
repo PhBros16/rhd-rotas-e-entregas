@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { localDb } from '../lib/clients'
 import { doNow, finishRoute, refresh, summarize, undo, type StopRow } from '../lib/routes'
-import { fmtCep, fmtPhone, mapsUrl, wazeUrl, whatsUrl } from '../lib/maplink'
+import { fmtCep, fmtPhone, mapsRouteUrl, mapsUrl, wazeUrl, whatsUrl } from '../lib/maplink'
 import { brl, fmtDur, fmtTime } from '../lib/format'
 import { buildBackup, shareText, stopDest } from '../lib/report'
 import RouteSummary from './RouteSummary'
@@ -42,7 +42,7 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
   const clientOf = (s: StopRow) => clients.find(c => c.id === s.client_id)
   const [t, setT] = useState(Date.now())
   const [sheet, setSheet] = useState<{ kind: 'deliver' | 'defer' | 'fail'; s: StopRow } | null>(null)
-  const [panel, setPanel] = useState<null | 'nav' | 'menu' | 'backup' | 'all'>(askBackup ? 'backup' : null)
+  const [panel, setPanel] = useState<null | 'nav' | 'menu' | 'backup' | 'all' | 'maps'>(askBackup ? 'backup' : null)
   const [online, setOnline] = useState(navigator.onLine)
   const [note, setNote] = useState('')
   const [plan, setPlan] = useState<null | { kind: 'optimize' } | { kind: 'insert'; s: StopRow }>(null)
@@ -97,6 +97,10 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
     setPanel(null)
   }
 
+  const MAXSTOPS = 9 // limite de paradas por link do Maps
+  const chunk = <T,>(l: T[], n: number) => Array.from({ length: Math.ceil(l.length / n) }, (_, i) => l.slice(i * n, i * n + n))
+  const routeLink = (l: StopRow[]) => mapsRouteUrl(l.map(s => stopDest(s, clientOf(s))))
+  const hoodRuns = (() => { const out: { label: string; items: StopRow[] }[] = []; for (const s of queue) { const k = s.neighborhood || 'Sem bairro', last = out[out.length - 1]; if (last && last.label === k) last.items.push(s); else out.push({ label: k, items: [s] }) } return out })()
   const act = 'flex-1 rounded-xl py-3 font-semibold active:scale-95'
   return (
     <div className="fixed inset-0 z-30 overflow-y-auto bg-slate-900">
@@ -168,11 +172,20 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
         <a onClick={() => setPanel(null)} href={mapsUrl(stopDest(next, clientOf(next)))} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-800 py-4 text-center text-lg font-bold">Google Maps</a>
         <a onClick={() => setPanel(null)} href={wazeUrl(stopDest(next, clientOf(next)))} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-800 py-4 text-center text-lg font-bold">Waze</a></div></Sheet>}
       {panel === 'menu' && <Sheet title="Menu da rota" onClose={() => setPanel(null)}><div className="flex flex-col gap-2">
+        <button onClick={() => setPanel('maps')} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">🗺 Rota com várias paradas no Maps</button>
         <button onClick={() => { setPanel(null); setAfterOpt(false); setPlan({ kind: 'optimize' }) }} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">🧭 Organizar a melhor ordem</button>
         <button onClick={() => setPanel('all')} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">📋 Ver rota completa</button>
         <button onClick={sendBackup} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">📤 Enviar backup das pendentes</button>
         <button onClick={finish} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">🏁 Finalizar rota</button></div></Sheet>}
       {panel === 'all' && <Sheet title={`Rota completa (${byPos.length})`} onClose={() => setPanel(null)}><ul className="flex flex-col gap-1">{byPos.map((s, i) => <li key={s.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-800 p-3"><div className="min-w-0"><p className="truncate font-semibold"><span className="text-slate-500">{i + 1}.</span> {s.status === 'delivered' ? '✅' : s.status === 'pending' ? (s.deferred ? '⏳' : '•') : '❌'} {s.client_name}</p><p className="truncate text-sm text-slate-400">{s.neighborhood} · {brl(Number(s.price))} · 💼 {brl(Number(s.courier_pay ?? 0))}</p></div>{s.status === 'pending' && s !== next && <button onClick={() => { if (s.deferred) setPlan({ kind: 'insert', s }); else void doNow(s); setPanel(null) }} className={`${btn} shrink-0`}>Agora</button>}</li>)}</ul></Sheet>}
+      {panel === 'maps' && <Sheet title="Rota no Google Maps" onClose={() => setPanel(null)}>
+        {queue.length === 0 ? <p className="py-4 text-slate-300">Não há paradas na fila.</p> : <>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Próximas paradas, na ordem da rota</p>
+          <div className="mb-4 flex flex-col gap-2">{chunk(queue, MAXSTOPS).map((b, i) => <a key={i} href={routeLink(b)} target="_blank" rel="noreferrer" onClick={() => setPanel(null)} className="rounded-xl bg-orange-500 py-4 text-center text-lg font-bold text-slate-900">Paradas {finished + i * MAXSTOPS + 1} a {finished + i * MAXSTOPS + b.length}</a>)}</div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Por bairro</p>
+          <div className="mb-3 flex flex-col gap-2">{hoodRuns.flatMap(r => chunk(r.items, MAXSTOPS).map((b, i) => <a key={`${r.label}-${i}`} href={routeLink(b)} target="_blank" rel="noreferrer" onClick={() => setPanel(null)} className="rounded-xl bg-slate-800 py-3 text-center font-semibold">{r.label} ({b.length})</a>))}</div>
+          <p className="text-xs text-slate-500">O Maps mostra a rota para você conferir antes de começar. Ele aceita poucas paradas por vez (até {MAXSTOPS}): ao terminar um bloco, abra o próximo. Para o Waze, use o botão Navegar de cada parada.</p></>}
+      </Sheet>}
       {panel === 'backup' && <Sheet title="Rota iniciada! 🚀" onClose={() => setPanel(null)}>
         <p className="mb-4 text-slate-300">Envie o <b>backup</b> das entregas para o seu WhatsApp. Se o app falhar no meio do caminho, você continua com a lista completa: endereços, valores, telefones e localizações.</p>
         <button onClick={() => { setPanel(null); setAfterOpt(true); setPlan({ kind: 'optimize' }) }} className="mb-2 w-full rounded-xl bg-slate-800 py-4 text-lg font-bold">🧭 Organizar a melhor ordem primeiro</button>
