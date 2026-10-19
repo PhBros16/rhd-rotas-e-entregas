@@ -64,9 +64,13 @@ export default function Routes() {
     setErr(''); await startRoute(r); setAskBackup(true); setWork(r.id)
   }
   async function remove(r: RouteRow) {
-    if (!window.confirm(`Excluir "${r.name}"?`)) return
+    if (r.status !== 'draft') {
+      if (r.payout_id) { setErr('Esta rota já foi quitada por um repasse. Desfaça o repasse no perfil do entregador antes de apagá-la.'); return }
+      const aviso = r.status === 'active' ? ' Ela está EM ANDAMENTO: o entregador vai perder a rota.' : ''
+      if (!window.confirm(`Apagar a rota "${r.name}" (${label[r.status]})?${aviso}\nIsso remove todas as entregas e registros dela e NÃO dá para desfazer.`)) return
+    } else if (!window.confirm(`Excluir "${r.name}"?`)) return
     const { error } = await supabase.from('routes').delete().eq('id', r.id)
-    if (error) setErr(error.message); else { await localDb.stops.where('route_id').equals(r.id).delete(); await localDb.routes.delete(r.id) }
+    if (error) setErr(error.message); else { setErr(''); await localDb.stops.where('route_id').equals(r.id).delete(); await localDb.routes.delete(r.id); setOpen(null) }
   }
 
   const stat = (a: string, b: string | number) => <div className="rounded-xl bg-slate-800 p-3"><p className="text-xs text-slate-400">{a}</p><p className="text-lg font-bold">{b}</p></div>
@@ -109,7 +113,7 @@ export default function Routes() {
                         {mine && r.status === 'draft' && <button onClick={() => go(r)} className="rounded-xl bg-orange-500 px-6 py-3 font-bold text-slate-900">Go</button>}
                         {mine && r.status === 'active' && <button onClick={() => setWork(r.id)} className="rounded-xl bg-orange-500 px-6 py-3 font-bold text-slate-900">Continuar</button>}
                         {r.status === 'finished' && <button onClick={() => setWork(r.id)} className="rounded-xl bg-slate-700 px-5 py-3 font-semibold">Ver relatório</button>}
-                        {(mine || admin) && r.status === 'draft' && <button onClick={() => remove(r)} className="rounded-xl bg-red-500/20 px-4 py-3 text-sm text-red-300">Excluir</button>}
+                        {((mine && r.status === 'draft') || admin) && <button onClick={() => remove(r)} className="rounded-xl bg-red-500/20 px-4 py-3 text-sm text-red-300">{r.status === 'draft' ? 'Excluir' : 'Apagar rota'}</button>}
                       </div>
                     </div>
                   )}
