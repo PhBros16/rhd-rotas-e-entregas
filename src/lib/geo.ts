@@ -135,3 +135,30 @@ export async function afterClientSave(id: string, needsGeo: boolean) {
     await refresh()
   } catch { /* sem internet: a próxima abertura tenta de novo */ }
 }
+
+/** Renomeia um bairro (ou une com outro de mesmo nome) nos clientes e nas paradas pendentes de rotas abertas. */
+export async function renameHood(city: string, from: string, to: string) {
+  const { data: cs } = await supabase.from('clients').select('id').eq('city', city).eq('neighborhood', from)
+  const ids = (cs ?? []).map(c => c.id as string)
+  if (!ids.length) return 0
+  const { error } = await supabase.from('clients').update({ neighborhood: to }).in('id', ids)
+  if (error) throw error
+  await pushToPending2(ids, { neighborhood: to })
+  void refresh()
+  return ids.length
+}
+/** Muda o bairro de cidade: a localização é descartada e recalculada. Devolve os ids para localizar de novo. */
+export async function moveCity(city: string, hood: string, toCity: string) {
+  const { data: cs } = await supabase.from('clients').select('id').eq('city', city).eq('neighborhood', hood)
+  const ids = (cs ?? []).map(c => c.id as string)
+  if (!ids.length) return ids
+  const reset = { city: toCity, lat: null, lng: null, geo_quality: null, geo_at: null }
+  const { error } = await supabase.from('clients').update(reset).in('id', ids)
+  if (error) throw error
+  await pushToPending2(ids, { city: toCity, lat: null, lng: null, geo_quality: null })
+  return ids
+}
+async function pushToPending2(clientIds: string[], fields: Record<string, unknown>) {
+  const routeIds = await openRouteIds()
+  if (routeIds.length) await supabase.from('route_stops').update(fields).in('client_id', clientIds).eq('status', 'pending').in('route_id', routeIds)
+}
