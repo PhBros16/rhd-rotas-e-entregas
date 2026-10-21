@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { localDb } from './clients'
+import { localDb, type Client } from './clients'
 
 export type StopStatus = 'pending' | 'delivered' | 'failed' | 'skipped'
 export type StopRow = {
@@ -120,3 +120,24 @@ export async function reorder(ordered: StopRow[]) {
   for (let i = 0; i < ordered.length; i++) if (ordered[i].position !== slots[i]) await patchStop(ordered[i].id, { position: slots[i] })
 }
 export async function undefer(s: StopRow) { await patchStop(s.id, { deferred: false, retry_at: null }) }
+
+/** Acrescenta clientes ao fim de uma rota (rascunho ou em andamento). Fica salvo no aparelho e sobe quando houver internet. */
+export async function addStops(routeId: string, items: { client: Client; price: number; packages: number; courierPay: number }[]) {
+  const existing = await localDb.stops.where('route_id').equals(routeId).toArray()
+  let pos = Math.max(-1, ...existing.map(s => s.position)) + 1
+  for (const it of items) {
+    const c = it.client, id = crypto.randomUUID()
+    const row: StopRow = {
+      id, route_id: routeId, client_id: c.id, client_name: c.name, phone: c.phone,
+      address: [c.street, c.number, c.complement].filter(Boolean).join(', ') || null, neighborhood: c.neighborhood, city: c.city,
+      lat: c.lat, lng: c.lng, position: pos++, packages: it.packages, price: it.price, status: 'pending', pay_method: null, paid_amount: null,
+      pay_differs: false, delivered_at: null, received_by: null, notes: null, deferred: false, retry_at: null, attempt_count: 0,
+      pin_url: null, client_notes: c.notes, courier_pay: it.courierPay, geo_quality: c.geo_quality,
+    }
+    const { id: _omit, ...data } = row
+    void _omit
+    await localDb.outbox.add({ table: 'route_stops', op: 'insert', id, data }) // primeiro na fila de envio: assim a atualização em segundo plano não apaga a parada
+    await localDb.stops.add(row)
+    void flush()
+  }
+}

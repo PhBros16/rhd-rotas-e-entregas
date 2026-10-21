@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import { supabase } from './supabase'
 import type { Op, RouteRow, StopRow } from './routes'
 
 export type Client = {
@@ -72,3 +73,9 @@ export const navQuery = (c: Pick<Client, 'street' | 'number' | 'neighborhood' | 
   [c.street, c.number].filter(Boolean).join(', '), c.neighborhood?.replace(/\s*\(.*?\)\s*/g, ' ').trim(), c.city ? `${c.city} - PE` : 'PE',
   c.cep && c.cep.length === 8 ? `${c.cep.slice(0, 5)}-${c.cep.slice(5)}` : c.cep,
 ].filter(Boolean).join(', ')
+
+/** Baixa a lista de clientes do servidor e guarda no aparelho (usada pelas telas que escolhem clientes). */
+export async function syncClients() {
+  const { data } = await supabase.from('clients').select('*').order('name')
+  if (data) { await localDb.clients.clear(); await localDb.clients.bulkPut(data as Client[]) }
+}
