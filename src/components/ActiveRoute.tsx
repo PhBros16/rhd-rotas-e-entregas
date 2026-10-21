@@ -8,6 +8,7 @@ import { buildBackup, shareText, stopDest } from '../lib/report'
 import RouteSummary from './RouteSummary'
 import { DeferSheet, DeliverSheet, FailSheet, Sheet, btn } from './StopSheets'
 import { InsertSheet, OptimizeSheet } from './RoutePlanner'
+import AddToRoute from './AddToRoute'
 
 const left = (iso: string | null, t: number) => { if (!iso) return 'no fim da rota'; const m = Math.round((new Date(iso).getTime() - t) / 60000); return m > 0 ? `volta em ${m} min` : m === 0 ? 'hora de voltar' : `atrasada ${-m} min` }
 const isDue = (s: StopRow, t: number) => s.deferred && !!s.retry_at && new Date(s.retry_at).getTime() <= t
@@ -47,6 +48,7 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
   const [note, setNote] = useState('')
   const [plan, setPlan] = useState<null | { kind: 'optimize' } | { kind: 'insert'; s: StopRow }>(null)
   const [afterOpt, setAfterOpt] = useState(false)
+  const [adding, setAdding] = useState(false)
   const notified = useRef<Set<string>>(new Set())
 
   useEffect(() => { const i = setInterval(() => setT(Date.now()), 20000); return () => clearInterval(i) }, [])
@@ -163,6 +165,7 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
         </>) : <button onClick={finish} className="w-full rounded-2xl bg-orange-500 py-5 text-xl font-extrabold text-slate-900">Finalizar rota</button>}
       </div></div>
 
+      {adding && <AddToRoute routeId={routeId} onClose={() => setAdding(false)} onDone={n => { setAdding(false); setNote(`${n} cliente(s) adicionado(s) ao fim da fila.`); setAfterOpt(false); setPlan({ kind: 'optimize' }) }} />}
       {plan?.kind === 'insert' && <InsertSheet stop={plan.s} stops={stops} onClose={() => setPlan(null)} onDone={m => { setNote(m); setPlan(null) }} />}
       {plan?.kind === 'optimize' && <OptimizeSheet stops={stops} fixFirst={m.delivered > 0} onClose={() => { setPlan(null); if (afterOpt) setPanel('backup') }} onDone={msg => { setNote(msg); setPlan(null); if (afterOpt) setPanel('backup') }} />}
       {sheet?.kind === 'deliver' && <DeliverSheet s={sheet.s} onClose={() => setSheet(null)} />}
@@ -172,6 +175,7 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
         <a onClick={() => setPanel(null)} href={mapsUrl(stopDest(next, clientOf(next)))} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-800 py-4 text-center text-lg font-bold">Google Maps</a>
         <a onClick={() => setPanel(null)} href={wazeUrl(stopDest(next, clientOf(next)))} target="_blank" rel="noreferrer" className="rounded-xl bg-slate-800 py-4 text-center text-lg font-bold">Waze</a></div></Sheet>}
       {panel === 'menu' && <Sheet title="Menu da rota" onClose={() => setPanel(null)}><div className="flex flex-col gap-2">
+        <button onClick={() => { setPanel(null); setAdding(true) }} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">➕ Adicionar clientes à rota</button>
         <button onClick={() => setPanel('maps')} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">🗺 Rota com várias paradas no Maps</button>
         <button onClick={() => { setPanel(null); setAfterOpt(false); setPlan({ kind: 'optimize' }) }} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">🧭 Organizar a melhor ordem</button>
         <button onClick={() => setPanel('all')} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">📋 Ver rota completa</button>

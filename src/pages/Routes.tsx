@@ -6,6 +6,7 @@ import { localDb } from '../lib/clients'
 import { refresh, startRoute, summarize, type RouteRow, type StopRow } from '../lib/routes'
 import { brl } from '../lib/format'
 import ActiveRoute from '../components/ActiveRoute'
+import AddToRoute from '../components/AddToRoute'
 
 const label = { draft: 'Rascunho', active: 'Em andamento', finished: 'Finalizada', cancelled: 'Cancelada' } as const
 const tone = { draft: 'bg-slate-700 text-slate-300', active: 'bg-orange-500/20 text-orange-300', finished: 'bg-emerald-500/20 text-emerald-300', cancelled: 'bg-red-500/20 text-red-300' } as const
@@ -31,6 +32,7 @@ export default function Routes() {
   const [work, setWork] = useState<string | null>(null)
   const [autoDone, setAutoDone] = useState(false)
   const [askBackup, setAskBackup] = useState(false)
+  const [addTo, setAddTo] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(true)
   const [fOwner, setFOwner] = useState(''); const [fStatus, setFStatus] = useState(''); const [from, setFrom] = useState(''); const [to, setTo] = useState('')
   const [err, setErr] = useState('')
@@ -111,6 +113,7 @@ export default function Routes() {
                       <ol className="mb-3 flex flex-col gap-2 text-sm">{stops.map((s, i) => <li key={s.id}><p><span className="text-slate-500">{i + 1}.</span> <span className="font-semibold">{s.client_name}</span> <span className="text-slate-500">· {s.neighborhood} · {s.packages} pct · {brl(Number(s.price))}</span></p><p className="pl-5 text-slate-400">{stopLine(s)}</p></li>)}</ol>
                       <div className="flex flex-wrap gap-2">
                         {mine && r.status === 'draft' && <button onClick={() => go(r)} className="rounded-xl bg-orange-500 px-6 py-3 font-bold text-slate-900">Go</button>}
+                        {mine && r.status === 'draft' && <button onClick={() => setAddTo(r.id)} className="rounded-xl bg-slate-700 px-5 py-3 font-semibold">➕ Adicionar clientes</button>}
                         {mine && r.status === 'active' && <button onClick={() => setWork(r.id)} className="rounded-xl bg-orange-500 px-6 py-3 font-bold text-slate-900">Continuar</button>}
                         {r.status === 'finished' && <button onClick={() => setWork(r.id)} className="rounded-xl bg-slate-700 px-5 py-3 font-semibold">Ver relatório</button>}
                         {((mine && r.status === 'draft') || admin) && <button onClick={() => remove(r)} className="rounded-xl bg-red-500/20 px-4 py-3 text-sm text-red-300">{r.status === 'draft' ? 'Excluir' : 'Apagar rota'}</button>}
@@ -123,6 +126,7 @@ export default function Routes() {
           </ul>
         </section>
       ) })}
+      {addTo && <AddToRoute routeId={addTo} onClose={() => setAddTo(null)} onDone={n => { setAddTo(null); setErr(`${n} cliente(s) adicionado(s) à rota.`) }} />}
       {work && <ActiveRoute routeId={work} askBackup={askBackup} owner={ownerOf(work)} onClose={() => { setWork(null); setAskBackup(false) }} />}
     </main>
   )
