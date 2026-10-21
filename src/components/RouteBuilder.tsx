@@ -3,23 +3,24 @@ import { supabase } from '../lib/supabase'
 import type { Client } from '../lib/clients'
 import { brl } from '../lib/format'
 import { useAuth } from '../auth'
+import { addStops } from '../lib/routes'
 
 export { brl }
 const PRICES = [35, 55, 60, 70, 80, 90, 100, 120]
 type Stop = { client: Client; price: number | null; priceText: string; packages: number }
 const num = (t: string) => { const v = parseFloat(t.replace(',', '.')); return Number.isFinite(v) && v >= 0 ? v : null }
 
-export default function RouteBuilder({ clients, onClose, onSaved }: { clients: Client[]; onClose: () => void; onSaved: () => void }) {
+export default function RouteBuilder({ clients, routeId, onClose, onSaved }: { clients: Client[]; routeId?: string; onClose: () => void; onSaved: () => void }) {
   const [stops, setStops] = useState<Stop[]>(clients.map(client => ({ client, price: null, priceText: '', packages: 1 })))
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
-  const [fee, setFee] = useState<number | null>(null)
+  const [fee, setFee] = useState<number | null>(() => { try { const v = localStorage.getItem('rhd:fee'); return v == null ? null : Number(v) } catch { return null } })
   const { profile } = useAuth()
   useEffect(() => {
     if (!profile) return
     Promise.all([supabase.from('profiles').select('pay_rate').eq('id', profile.id).single(), supabase.from('app_settings').select('value').eq('key', 'courier_fee').single()])
-      .then(([me, std]) => setFee(me.data?.pay_rate != null ? Number(me.data.pay_rate) : std.data ? Number(std.data.value) : 0))
+      .then(([me, std]) => { if (me.error && std.error) return; const v = me.data?.pay_rate != null ? Number(me.data.pay_rate) : std.data ? Number(std.data.value) : 0; setFee(v); try { localStorage.setItem('rhd:fee', String(v)) } catch { /* ignora */ } })
   }, [profile])
   const patch = (i: number, p: Partial<Stop>) => setStops(s => s.map((x, j) => (j === i ? { ...x, ...p } : x)))
   const total = stops.reduce((a, s) => a + (s.price ?? 0), 0)
@@ -31,6 +32,10 @@ export default function RouteBuilder({ clients, onClose, onSaved }: { clients: C
     const warn = [noPrice && `${noPrice} sem valor da entrega`, !fee && 'o valor por entrega do entregador ainda não foi definido pelo admin'].filter(Boolean).join(' e ')
     if (warn && !window.confirm(`Atenção: ${warn}. Salvar assim mesmo?`)) return
     setBusy(true); setMsg('')
+    if (routeId) { // adiciona a uma rota que já existe
+      await addStops(routeId, stops.map(s => ({ client: s.client, price: s.price ?? 0, packages: s.packages, courierPay: fee ?? 0 })))
+      setBusy(false); onSaved(); return
+    }
     const hoods = [...new Set(stops.map(s => s.client.neighborhood).filter(Boolean))] as string[]
     const auto = `Rota ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}${hoods.length ? ' · ' + hoods.slice(0, 2).join(', ') + (hoods.length > 2 ? '…' : '') : ''}`
     const { data: r, error } = await supabase.from('routes').insert({ name: name.trim() || auto }).select('id').single()
@@ -51,8 +56,8 @@ export default function RouteBuilder({ clients, onClose, onSaved }: { clients: C
   return (
     <div className="fixed inset-0 z-20 overflow-y-auto bg-slate-900">
       <div className="mx-auto max-w-lg p-4 pb-28">
-        <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-bold">Montar rota</h2><button onClick={onClose} className="rounded-lg bg-slate-700 px-3 py-2 text-sm">Voltar</button></div>
-        <input className="mb-3 w-full rounded-xl bg-slate-800 px-4 py-3 outline-none focus:ring-2 focus:ring-orange-500" placeholder="Nome da rota (opcional)" value={name} onChange={e => setName(e.target.value)} />
+        <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-bold">{routeId ? 'Adicionar à rota' : 'Montar rota'}</h2><button onClick={onClose} className="rounded-lg bg-slate-700 px-3 py-2 text-sm">Voltar</button></div>
+        {!routeId && <input className="mb-3 w-full rounded-xl bg-slate-800 px-4 py-3 outline-none focus:ring-2 focus:ring-orange-500" placeholder="Nome da rota (opcional)" value={name} onChange={e => setName(e.target.value)} />}
         <div className="mb-3 rounded-xl bg-slate-800 p-3 text-sm"><p className="text-slate-400">{stops.length} entrega{stops.length !== 1 ? 's' : ''} · {stops.reduce((a, s) => a + s.packages, 0)} pacote(s) · cobrado <span className="font-semibold text-orange-400">{brl(total)}</span></p>
           <p className="mt-1">💼 Você recebe <span className="text-lg font-extrabold text-emerald-400">{brl(totalPay)}</span> <span className="text-slate-500">({fee === null ? '…' : `${brl(fee)} por entrega`})</span></p></div>
         <ul className="flex flex-col gap-3">
@@ -77,7 +82,7 @@ export default function RouteBuilder({ clients, onClose, onSaved }: { clients: C
         {msg && <p className="mt-3 text-sm text-red-400">{msg}</p>}
       </div>
       <div className="fixed inset-x-0 bottom-0 bg-slate-900 p-4"><div className="mx-auto max-w-lg">
-        <button disabled={busy || !stops.length} onClick={save} className="w-full rounded-xl bg-orange-500 py-4 text-lg font-bold text-slate-900 disabled:opacity-50">{busy ? 'Salvando…' : `Salvar rota · ${brl(total)}`}</button>
+        <button disabled={busy || !stops.length} onClick={save} className="w-full rounded-xl bg-orange-500 py-4 text-lg font-bold text-slate-900 disabled:opacity-50">{busy ? 'Salvando…' : `${routeId ? 'Adicionar à rota' : 'Salvar rota'} · ${brl(total)}`}</button>
       </div></div>
     </div>
   )

@@ -11,7 +11,7 @@ const field = 'w-full rounded-xl bg-slate-800 px-4 py-3 text-base outline-none f
 const chip = 'rounded-lg bg-slate-700 px-3 py-2 text-sm active:scale-95'
 const addr = (c: Client) => [c.street, c.number].filter(Boolean).join(', ')
 
-function ClientForm({ initial, restored, all, onClose, onSaved }: { initial: Client | null; restored?: ClientDraft; all: Client[]; onClose: () => void; onSaved: (note?: string) => void }) {
+export function ClientForm({ initial, restored, all, onClose, onSaved }: { initial: Client | null; restored?: ClientDraft; all: Client[]; onClose: () => void; onSaved: (note?: string) => void }) {
   const base = useRef(JSON.stringify(initial ? { ...emptyDraft(), ...initial } : emptyDraft()))
   const [d, setD] = useState<ClientDraft>(restored ?? (JSON.parse(base.current) as ClientDraft))
   const [fromDraft, setFromDraft] = useState(Boolean(restored))
