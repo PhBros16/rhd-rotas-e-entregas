@@ -10,8 +10,8 @@ const PRICES = [35, 55, 60, 70, 80, 90, 100, 120]
 type Stop = { client: Client; price: number | null; priceText: string; packages: number }
 const num = (t: string) => { const v = parseFloat(t.replace(',', '.')); return Number.isFinite(v) && v >= 0 ? v : null }
 
-export default function RouteBuilder({ clients, routeId, onClose, onSaved }: { clients: Client[]; routeId?: string; onClose: () => void; onSaved: () => void }) {
-  const [stops, setStops] = useState<Stop[]>(clients.map(client => ({ client, price: null, priceText: '', packages: 1 })))
+export default function RouteBuilder({ clients, routeId, defaults, onClose, onSaved }: { clients: Client[]; routeId?: string; defaults?: Record<string, number>; onClose: () => void; onSaved: () => void }) {
+  const [stops, setStops] = useState<Stop[]>(clients.map(client => ({ client, price: null, priceText: '', packages: defaults?.[client.id] ?? 1 })))
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
