@@ -5,6 +5,7 @@ import { CITIES, canon, navQuery, digits, emptyDraft, localDb, lookupCep, norm, 
 import { fmtCep, fmtPhone, mapsUrl, wazeUrl, whatsUrl } from '../lib/maplink'
 import { afterClientSave, geocodeClients } from '../lib/geo'
 import ScanImport from '../components/ScanImport'
+import { SCAN_ENABLED } from '../lib/flags'
 import RouteBuilder from '../components/RouteBuilder'
 import { clearDraft, loadDraft, saveDraft, type Draft } from '../lib/draft'
 
@@ -207,7 +208,7 @@ export default function Clients({ onRouteSaved }: { onRouteSaved?: () => void })
       </header>
       {offline && <p className="mb-2 rounded-lg bg-amber-500/20 p-2 text-sm text-amber-300">Sem conexão: mostrando a última lista salva.</p>}
       {toast && <p className="mb-2 rounded-lg bg-amber-500/20 p-2 text-sm text-amber-300">{toast}</p>}
-      {!selecting && <button onClick={() => setScanning(true)} className="mb-3 w-full rounded-xl bg-slate-800 py-3 font-semibold active:scale-[0.99]">📷 Importar fotos das encomendas</button>}
+      {SCAN_ENABLED && !selecting && <button onClick={() => setScanning(true)} className="mb-3 w-full rounded-xl bg-slate-800 py-3 font-semibold active:scale-[0.99]">📷 Importar fotos das encomendas</button>}
       <input className={`${field} mb-3`} placeholder="Buscar por nome, bairro, rua ou telefone" value={q} onChange={e => setQ(e.target.value)} />
       <div className="mb-2 flex gap-2">{seg('cidade', 'Por cidade e bairro')}{seg('todos', 'Todos (A–Z)')}</div>
       <div className="mb-3 flex items-center justify-between gap-3 text-sm">
@@ -244,7 +245,7 @@ export default function Clients({ onRouteSaved }: { onRouteSaved?: () => void })
       {!selecting && <button onClick={() => setEditing(null)} aria-label="Novo cliente" className="fixed bottom-6 right-6 h-16 w-16 rounded-full bg-orange-500 text-4xl font-bold text-slate-900 shadow-lg active:scale-95">+</button>}
       {selecting && <div className="fixed inset-x-0 bottom-0 bg-slate-900 p-4"><div className="mx-auto max-w-lg"><button disabled={!selIds.length} onClick={() => setBuilding(true)} className="w-full rounded-xl bg-orange-500 py-4 text-lg font-bold text-slate-900 disabled:opacity-40">{selIds.length ? `Continuar com ${selIds.length} cliente${selIds.length > 1 ? 's' : ''}` : 'Toque nos clientes para marcar'}</button></div></div>}
       {editing !== undefined && <ClientForm initial={editing} all={clients} restored={pending && pending.id === (editing?.id ?? null) ? pending.data : undefined} onClose={() => { setEditing(undefined); setPending(null) }} onSaved={n => { setEditing(undefined); setPending(null); if (n) say(n); load() }} />}
-      {scanning && <ScanImport clients={clients} onClose={() => { setScanning(false); void load() }} onRouteSaved={() => { setScanning(false); void load(); onRouteSaved?.() }} />}
+      {SCAN_ENABLED && scanning && <ScanImport clients={clients} onClose={() => { setScanning(false); void load() }} onRouteSaved={() => { setScanning(false); void load(); onRouteSaved?.() }} />}
       {building && <RouteBuilder clients={selIds.map(id => clients.find(c => c.id === id)).filter(Boolean) as Client[]} onClose={() => setBuilding(false)} onSaved={() => { setBuilding(false); setSelecting(false); setSelIds([]); onRouteSaved?.() }} />}
     </main>
   )
