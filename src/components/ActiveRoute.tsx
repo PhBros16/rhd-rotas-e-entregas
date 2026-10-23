@@ -9,6 +9,7 @@ import RouteSummary from './RouteSummary'
 import { DeferSheet, DeliverSheet, FailSheet, Sheet, btn } from './StopSheets'
 import { InsertSheet, OptimizeSheet } from './RoutePlanner'
 import AddToRoute from './AddToRoute'
+import { DWELL_MIN, etas, finishAt, has } from '../lib/sequencer'
 
 const left = (iso: string | null, t: number) => { if (!iso) return 'no fim da rota'; const m = Math.round((new Date(iso).getTime() - t) / 60000); return m > 0 ? `volta em ${m} min` : m === 0 ? 'hora de voltar' : `atrasada ${-m} min` }
 const isDue = (s: StopRow, t: number) => s.deferred && !!s.retry_at && new Date(s.retry_at).getTime() <= t
@@ -103,6 +104,22 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
   const chunk = <T,>(l: T[], n: number) => Array.from({ length: Math.ceil(l.length / n) }, (_, i) => l.slice(i * n, i * n + n))
   const routeLink = (l: StopRow[]) => mapsRouteUrl(l.map(s => stopDest(s, clientOf(s))))
   const hoodRuns = (() => { const out: { label: string; items: StopRow[] }[] = []; for (const s of queue) { const k = s.neighborhood || 'Sem bairro', last = out[out.length - 1]; if (last && last.label === k) last.items.push(s); else out.push({ label: k, items: [s] }) } return out })()
+  const lk = (s: StopRow) => ({ id: s.id, lat: s.lat, lng: s.lng, hood: s.neighborhood })
+  const lastDone = stops.filter(s => s.status === 'delivered' && has(lk(s))).sort((a, b) => (b.delivered_at ?? '').localeCompare(a.delivered_at ?? ''))[0]
+  const fromPt = lastDone ? { lat: lastDone.lat!, lng: lastDone.lng! } : null
+  const arrivals = etas(fromPt, queue.map(lk), t)
+  const fin = finishAt(fromPt, queue.map(lk), t)
+  const hoodTimes = (() => {
+    const out: { label: string; n: number; arrive: number | null; min: number }[] = []
+    for (let i = 0; i < queue.length;) {
+      const k = queue[i].neighborhood || 'Sem bairro'; let j = i
+      while (j < queue.length && (queue[j].neighborhood || 'Sem bairro') === k) j++
+      const a = arrivals[i], b = arrivals[j - 1], n = j - i
+      out.push({ label: k, n, arrive: a, min: a != null && b != null ? (b - a) / 60000 + DWELL_MIN : n * DWELL_MIN })
+      i = j
+    }
+    return out
+  })()
   const act = 'flex-1 rounded-xl py-3 font-semibold active:scale-95'
   return (
     <div className="fixed inset-0 z-30 overflow-y-auto bg-slate-900">
@@ -110,6 +127,7 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
         <div className="flex items-center gap-2"><button onClick={onClose} className={btn}>←</button><p className="min-w-0 flex-1 truncate font-bold">{route.name}</p><button onClick={() => setPanel('menu')} className={btn} aria-label="Menu">⋯</button></div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-orange-500 transition-all" style={{ width: `${pctDone}%` }} /></div>
         <p className="mt-1 flex items-center justify-between text-sm"><span className="font-semibold">{m.delivered}/{m.total} entregues</span><span className="font-extrabold text-emerald-400">💼 {brl(m.courierPay)}</span><span className="text-slate-400">{route.go_at ? fmtDur(t - new Date(route.go_at).getTime()) : ''}</span></p>
+        {queue.length > 0 && <p className="text-xs text-slate-400">⏱ Previsão de término ~{fmtTime(new Date(fin.at).toISOString())}{fin.partial ? ' (parcial)' : ''}</p>}
       </div></div>
 
       <div className="mx-auto max-w-lg px-4 pb-64 pt-2">
@@ -181,7 +199,11 @@ export default function ActiveRoute({ routeId, owner, askBackup, onClose }: { ro
         <button onClick={() => setPanel('all')} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">📋 Ver rota completa</button>
         <button onClick={sendBackup} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">📤 Enviar backup das pendentes</button>
         <button onClick={finish} className="rounded-xl bg-slate-800 py-4 text-lg font-bold">🏁 Finalizar rota</button></div></Sheet>}
-      {panel === 'all' && <Sheet title={`Rota completa (${byPos.length})`} onClose={() => setPanel(null)}><ul className="flex flex-col gap-1">{byPos.map((s, i) => <li key={s.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-800 p-3"><div className="min-w-0"><p className="truncate font-semibold"><span className="text-slate-500">{i + 1}.</span> {s.status === 'delivered' ? '✅' : s.status === 'pending' ? (s.deferred ? '⏳' : '•') : '❌'} {s.client_name}</p><p className="truncate text-sm text-slate-400">{s.neighborhood} · {brl(Number(s.price))} · 💼 {brl(Number(s.courier_pay ?? 0))}</p></div>{s.status === 'pending' && s !== next && <button onClick={() => { if (s.deferred) setPlan({ kind: 'insert', s }); else void doNow(s); setPanel(null) }} className={`${btn} shrink-0`}>Agora</button>}</li>)}</ul></Sheet>}
+      {panel === 'all' && <Sheet title={`Rota completa (${byPos.length})`} onClose={() => setPanel(null)}>
+        {hoodTimes.length > 0 && <div className="mb-3 rounded-xl bg-slate-800 p-3"><p className="mb-2 text-xs font-bold uppercase tracking-wider text-orange-300">⏱ Tempo estimado por bairro</p>
+          {hoodTimes.map((h, k) => <div key={k} className="flex justify-between gap-2 py-0.5 text-sm"><span className="min-w-0 truncate">{h.label} <span className="text-slate-500">({h.n})</span></span><span className="shrink-0 text-slate-300">{h.arrive != null ? `chega ~${fmtTime(new Date(h.arrive).toISOString())} · ` : ''}{h.min >= 60 ? fmtDur(h.min * 60000) : `${Math.round(h.min)} min`}</span></div>)}
+          <p className="mt-2 text-xs text-slate-500">Estimativa: {DWELL_MIN} min parado em cada entrega mais o deslocamento{fin.partial ? ' (parcial: faltam endereços localizados)' : ''}.</p></div>}
+        <ul className="flex flex-col gap-1">{byPos.map((s, i) => <li key={s.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-800 p-3"><div className="min-w-0"><p className="truncate font-semibold"><span className="text-slate-500">{i + 1}.</span> {s.status === 'delivered' ? '✅' : s.status === 'pending' ? (s.deferred ? '⏳' : '•') : '❌'} {s.client_name}</p><p className="truncate text-sm text-slate-400">{s.neighborhood} · {brl(Number(s.price))} · 💼 {brl(Number(s.courier_pay ?? 0))}{(() => { const qi = queue.findIndex(q => q.id === s.id); return qi >= 0 && arrivals[qi] != null ? ` · ~${fmtTime(new Date(arrivals[qi]!).toISOString())}` : '' })()}</p></div>{s.status === 'pending' && s !== next && <button onClick={() => { if (s.deferred) setPlan({ kind: 'insert', s }); else void doNow(s); setPanel(null) }} className={`${btn} shrink-0`}>Agora</button>}</li>)}</ul></Sheet>}
       {panel === 'maps' && <Sheet title="Rota no Google Maps" onClose={() => setPanel(null)}>
         {queue.length === 0 ? <p className="py-4 text-slate-300">Não há paradas na fila.</p> : <>
           <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Próximas paradas, na ordem da rota</p>

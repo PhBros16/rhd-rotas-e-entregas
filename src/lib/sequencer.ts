@@ -90,6 +90,16 @@ export function etas(from: Pt | null, ordered: Stoplike[], startMs: number): (nu
   })
 }
 
+/** Quando a rota deve terminar (viagem + tempo parado em cada entrega). `partial` = há paradas sem localização, só o tempo parado entrou na conta. */
+export function finishAt(from: Pt | null, ordered: Stoplike[], startMs: number) {
+  let t = startMs, prev: Pt | null = from, partial = false
+  for (const s of ordered) {
+    if (has(s)) { if (prev) t += travelMin(roadKm(prev, s)) * 60000; prev = s } else partial = true
+    t += DWELL_MIN * 60000
+  }
+  return { at: t, partial }
+}
+
 /* ---------- encaixe de uma parada adiada ---------- */
 export type Insertion = { index: number; prevId: string | null; nextId: string | null; extraKm: number; extraMin: number; score: number }
 export function insertionAt(from: Pt | null, q: Item[], x: Item, k: number): Insertion {
