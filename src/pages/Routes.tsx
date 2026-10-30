@@ -97,7 +97,7 @@ export default function Routes() {
       {routes && list.length === 0 && <p className="mt-10 text-center text-slate-400">{(routes.length ? 'Nenhuma rota neste filtro.' : 'Nenhuma rota ainda. Em Clientes, toque em “Montar rota”.')}</p>}
       {days.map(([k, rs]) => { const d = sum(rs); return (
         <section key={k} className="mb-5">
-          <div className="mb-2 flex items-baseline justify-between gap-2"><h2 className="text-sm font-semibold capitalize text-orange-400">{dayLabel(k)}</h2><span className="text-xs text-slate-400">{d.delivered}/{d.total} entregas · {brl(d.received)}</span></div>
+          <div className="mb-2 flex items-baseline justify-between gap-2"><h2 className="text-sm font-semibold text-orange-400 first-letter:uppercase">{dayLabel(k)}</h2><span className="text-xs text-slate-400">{d.delivered}/{d.total} entregas · {brl(d.received)}</span></div>
           <ul className="flex flex-col gap-3">
             {rs.map(r => {
               const stops = (stopsBy.get(r.id) ?? []).sort((a, b) => a.position - b.position)
