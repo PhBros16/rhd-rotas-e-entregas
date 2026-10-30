@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth'
 import { localDb } from '../lib/clients'
-import { refresh, startRoute, summarize, type RouteRow, type StopRow } from '../lib/routes'
+import { moveStop, refresh, removeStop, startRoute, summarize, type RouteRow, type StopRow } from '../lib/routes'
 import { brl } from '../lib/format'
 import ActiveRoute from '../components/ActiveRoute'
 import AddToRoute from '../components/AddToRoute'
@@ -110,7 +110,8 @@ export default function Routes() {
                   </button>
                   {open === r.id && (
                     <div className="border-t border-slate-700 p-4 pt-3">
-                      <ol className="mb-3 flex flex-col gap-2 text-sm">{stops.map((s, i) => <li key={s.id}><p><span className="text-slate-500">{i + 1}.</span> <span className="font-semibold">{s.client_name}</span> <span className="text-slate-500">· {s.neighborhood} · {s.packages} pct · {brl(Number(s.price))}</span></p><p className="pl-5 text-slate-400">{stopLine(s)}</p></li>)}</ol>
+                      <ol className="mb-3 flex flex-col gap-2 text-sm">{stops.map((s, i) => { const edit = mine && r.status === 'draft'; const ib = 'h-9 w-9 rounded-lg bg-slate-700 text-base disabled:opacity-30'; return <li key={s.id} className="flex items-start gap-2"><div className="min-w-0 flex-1"><p><span className="text-slate-500">{i + 1}.</span> <span className="font-semibold">{s.client_name}</span> <span className="text-slate-500">· {s.neighborhood} · {s.packages} pct · {brl(Number(s.price))}</span></p><p className="pl-5 text-slate-400">{stopLine(s)}</p></div>
+                        {edit && <div className="flex shrink-0 gap-1"><button aria-label="Subir" disabled={i === 0} onClick={() => void moveStop(stops, i, -1)} className={ib}>↑</button><button aria-label="Descer" disabled={i === stops.length - 1} onClick={() => void moveStop(stops, i, 1)} className={ib}>↓</button><button aria-label="Tirar da rota" onClick={() => { if (window.confirm(`Tirar ${s.client_name} desta rota?`)) void removeStop(s) }} className={`${ib} text-red-300`}>✕</button></div>}</li> })}</ol>
                       <div className="flex flex-wrap gap-2">
                         {mine && r.status === 'draft' && <button onClick={() => go(r)} className="rounded-xl bg-orange-500 px-6 py-3 font-bold text-slate-900">Go</button>}
                         {mine && r.status === 'draft' && <button onClick={() => setAddTo(r.id)} className="rounded-xl bg-slate-700 px-5 py-3 font-semibold">➕ Adicionar clientes</button>}

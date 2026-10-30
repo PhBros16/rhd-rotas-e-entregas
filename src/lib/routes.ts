@@ -15,7 +15,7 @@ export type RouteRow = {
   id: string; owner_id: string; name: string | null; status: 'draft' | 'active' | 'finished' | 'cancelled'
   go_at: string | null; finished_at: string | null; created_at: string; payout_id: string | null
 }
-export type Op = { seq?: number; table: 'routes' | 'route_stops' | 'stop_attempts'; op: 'update' | 'insert'; id: string; data: Record<string, unknown> }
+export type Op = { seq?: number; table: 'routes' | 'route_stops' | 'stop_attempts'; op: 'update' | 'insert' | 'delete'; id: string; data: Record<string, unknown> }
 
 /* ---------- fila de sincronização (funciona sem internet) ---------- */
 let flushing = false
@@ -29,7 +29,7 @@ export async function flush() {
       const op = await localDb.outbox.orderBy('seq').first()
       if (!op) break
       const q = supabase.from(op.table)
-      const { error } = op.op === 'insert' ? await q.insert({ id: op.id, ...op.data }) : await q.update(op.data).eq('id', op.id)
+      const { error } = op.op === 'insert' ? await q.insert({ id: op.id, ...op.data }) : op.op === 'delete' ? await q.delete().eq('id', op.id) : await q.update(op.data).eq('id', op.id)
       if (error && !error.code) break // sem rede: tenta de novo depois
       if (error && error.code !== '23505') console.warn('Alteração descartada pelo servidor:', op, error.message)
       await localDb.outbox.delete(op.seq!)
@@ -140,4 +140,18 @@ export async function addStops(routeId: string, items: { client: Client; price: 
     await localDb.stops.add(row)
     void flush()
   }
+}
+
+/** Tira uma parada do rascunho. Fica salvo no aparelho e sobe quando houver internet. */
+export async function removeStop(s: StopRow) {
+  await localDb.outbox.add({ table: 'route_stops', op: 'delete', id: s.id, data: {} }) // primeiro na fila: a atualização em segundo plano não traz a parada de volta
+  await localDb.stops.delete(s.id)
+  void flush()
+}
+/** Troca a parada de lugar com a vizinha (dir = -1 sobe, +1 desce). */
+export async function moveStop(ordered: StopRow[], i: number, dir: -1 | 1) {
+  const j = i + dir
+  if (j < 0 || j >= ordered.length) return
+  const next = [...ordered];[next[i], next[j]] = [next[j], next[i]]
+  await reorder(next)
 }
