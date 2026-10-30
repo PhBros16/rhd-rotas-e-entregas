@@ -1,3 +1,14 @@
 @import "tailwindcss";
 :root { color-scheme: dark; }
 body { background:#0f172a; color:#f1f5f9; font-family: system-ui, sans-serif; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+
+/* Impressão / Salvar como PDF: só o relatório, em fundo branco. */
+@media print {
+  body * { visibility: hidden; }
+  .rhd-report, .rhd-report * { visibility: visible; }
+  .rhd-report { position: absolute !important; inset: 0 auto auto 0 !important; width: 100%; height: auto !important; overflow: visible !important; background: #fff !important; }
+  .rhd-report * { background: transparent !important; color: #111 !important; box-shadow: none !important; }
+  .rhd-report .rounded-2xl { border: 1px solid #bbb; break-inside: avoid; }
+  .rhd-report .no-print { display: none !important; }
+  .rhd-report > div { max-width: 100% !important; padding-bottom: 0 !important; }
+}
