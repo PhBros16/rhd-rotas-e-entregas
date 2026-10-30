@@ -16,7 +16,7 @@ export default function RouteSummary({ route, stops, owner, onClose }: { route: 
   const big = (a: string, b: string) => <div className="rounded-2xl bg-slate-800 p-3"><p className="text-xs text-slate-400">{a}</p><p className="text-xl font-extrabold">{b}</p></div>
   return (
     <div className="rhd-report fixed inset-0 z-30 overflow-y-auto bg-slate-900">
-      <div className="mx-auto max-w-lg p-4 pb-32">
+      <div className="mx-auto max-w-lg p-4 pb-48">
         <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-bold">📋 Relatório da rota</h2><button onClick={onClose} className={`${btn} no-print`}>Fechar</button></div>
         <div className="mb-4 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 p-4 text-slate-900">
           <p className="text-lg font-extrabold">{route.name}</p>
@@ -39,10 +39,10 @@ export default function RouteSummary({ route, stops, owner, onClose }: { route: 
       </div>
       <div className="no-print fixed inset-x-0 bottom-0 bg-slate-900 p-4"><div className="mx-auto max-w-lg">
         {msg && <p className="mb-2 text-center text-sm text-emerald-300">{msg}</p>}
+        <button onClick={async () => { const r = await shareText(text); if (r === 'copied') setMsg('Relatório copiado. Cole no WhatsApp.') }} className="mb-2 w-full rounded-xl bg-orange-500 py-4 text-lg font-bold text-slate-900">Compartilhar no WhatsApp</button>
         <div className="flex gap-2">
-          <button onClick={async () => { const r = await shareText(text); if (r === 'copied') setMsg('Relatório copiado. Cole no WhatsApp.') }} className="flex-1 rounded-xl bg-orange-500 py-4 text-lg font-bold text-slate-900">Compartilhar no WhatsApp</button>
-          <button onClick={async () => setMsg((await copyText(text)) ? 'Relatório copiado.' : 'Não foi possível copiar.')} className="rounded-xl bg-slate-700 px-5 font-semibold">Copiar</button>
-          <button onClick={() => window.print()} className="rounded-xl bg-slate-700 px-5 font-semibold">PDF</button>
+          <button onClick={async () => setMsg((await copyText(text)) ? 'Relatório copiado.' : 'Não foi possível copiar.')} className="flex-1 rounded-xl bg-slate-700 py-3 font-semibold">Copiar</button>
+          <button onClick={() => window.print()} className="flex-1 rounded-xl bg-slate-700 py-3 font-semibold">Salvar PDF</button>
         </div>
       </div></div>
     </div>
