@@ -61,6 +61,7 @@ export default function Routes() {
 
   const ownerOf = (id: string) => { const r = (routes ?? []).find(x => x.id === id); return r && r.owner_id !== profile?.id ? names[r.owner_id] ?? 'Entregador' : profile?.full_name ?? '' }
   async function go(r: RouteRow) {
+    if (!allStops.some(s => s.route_id === r.id)) { setErr('Esta rota está vazia. Adicione clientes antes de dar o Go.'); return }
     if ((routes ?? []).some(x => x.status === 'active' && x.owner_id === profile?.id)) { setErr('Você já tem uma rota em andamento. Continue ou finalize ela primeiro.'); return }
     if (!window.confirm(`Iniciar "${r.name}" agora?`)) return
     setErr(''); await startRoute(r); setAskBackup(true); setWork(r.id)
